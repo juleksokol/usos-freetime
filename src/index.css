@@ -9,4 +9,52 @@ body,
 body {
   margin: 0;
   background-color: #f8fafc;
+  color: #1e293b;
+}
+
+/* ===== Tryb ciemny: klasa "dark" na elemencie <html> podmienia paletę ===== */
+.dark {
+  color-scheme: dark;
+
+  --color-slate-50: #172033;
+  --color-slate-100: #263449;
+  --color-slate-200: #334155;
+  --color-slate-300: #475569;
+  --color-slate-400: #8391a7;
+  --color-slate-500: #94a3b8;
+  --color-slate-600: #b4c0d0;
+  --color-slate-700: #cbd5e1;
+  --color-slate-800: #e2e8f0;
+  --color-slate-900: #f1f5f9;
+
+  --color-red-50: #3b1219;
+  --color-red-200: #7f1d1d;
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+
+  --color-green-50: #10281c;
+  --color-green-100: #14391f;
+  --color-green-600: #4ade80;
+  --color-green-700: #86efac;
+  --color-green-800: #bbf7d0;
+
+  --color-amber-50: #33260a;
+  --color-amber-100: #4a3410;
+  --color-amber-600: #fbbf24;
+  --color-amber-800: #fcd34d;
+
+  --color-indigo-50: #1e1b4b;
+}
+
+.dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+.dark .bg-white {
+  background-color: #1e293b;
+}
+
+.dark .text-indigo-600 {
+  color: #818cf8;
 }

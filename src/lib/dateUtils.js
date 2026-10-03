@@ -1,3 +1,5 @@
+import { DAY_NAMES } from './constants'
+
 const pad = (n) => String(n).padStart(2, '0')
 
 // Wszystkie daty to teksty "RRRR-MM-DD"; obliczenia w UTC, żeby uniknąć problemów ze zmianą czasu
@@ -24,18 +26,22 @@ export function todayISO() {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
+// Dzień tygodnia daty: 1 = poniedziałek ... 7 = niedziela
+export function weekdayOf(iso) {
+  return parseISO(iso).getUTCDay() || 7
+}
+
 // Poniedziałek tygodnia, w którym leży dana data
 export function mondayOf(iso) {
-  const dayOfWeek = parseISO(iso).getUTCDay() || 7 // niedziela = 7
-  return addDays(iso, 1 - dayOfWeek)
+  return addDays(iso, 1 - weekdayOf(iso))
 }
 
 // Domyślny tydzień: bieżący; w weekend następny
 export function defaultWeekStart() {
   const today = todayISO()
-  const dayOfWeek = parseISO(today).getUTCDay() // 0 = niedziela, 6 = sobota
+  const dayOfWeek = weekdayOf(today)
   const monday = mondayOf(today)
-  return dayOfWeek === 0 || dayOfWeek === 6 ? addDays(monday, 7) : monday
+  return dayOfWeek >= 6 ? addDays(monday, 7) : monday
 }
 
 // "2026-10-05" -> "05.10"
@@ -48,6 +54,11 @@ export function formatDayMonth(iso) {
 export function formatDate(iso) {
   const [year, month, day] = iso.split('-')
   return `${day}.${month}.${year}`
+}
+
+// "2026-10-05" -> "Poniedziałek 05.10.2026"
+export function formatLongDate(iso) {
+  return `${DAY_NAMES[weekdayOf(iso)]} ${formatDate(iso)}`
 }
 
 // "05.10.2026 – 09.10.2026"
@@ -70,5 +81,13 @@ export function occursOn(event, isoDate) {
 export function eventsForWeek(events, weekStart) {
   return events.filter((event) =>
     occursOn(event, addDays(weekStart, event.day_of_week - 1))
+  )
+}
+
+// Zajęcia w konkretnym dniu
+export function eventsOnDate(events, isoDate) {
+  const day = weekdayOf(isoDate)
+  return events.filter(
+    (event) => event.day_of_week === day && occursOn(event, isoDate)
   )
 }

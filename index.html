@@ -18,6 +18,16 @@
     <meta name="apple-mobile-web-app-title" content="FreeTime" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>USOS FreeTime</title>
+    <script>
+      try {
+        var stored = localStorage.getItem('freetime:theme');
+        var dark =
+          stored === 'dark' ||
+          (stored !== 'light' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

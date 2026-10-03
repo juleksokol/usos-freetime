@@ -1,36 +1,51 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  CalendarCheck,
   CalendarClock,
   CalendarDays,
   Layers,
   Loader2,
   LogOut,
+  Settings as SettingsIcon,
   Users,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { PERSON_COLORS } from '../lib/constants'
 import { defaultWeekStart, eventsForWeek } from '../lib/dateUtils'
+import { loadCache, saveCache } from '../lib/offlineCache'
 import { fetchUserSchedule } from '../lib/scheduleService'
+import useRealtimeSync from '../hooks/useRealtimeSync'
+import usePersistentState from '../hooks/usePersistentState'
+import CustomEvents from '../components/CustomEvents'
+import GroupsPanel from '../components/GroupsPanel'
 import ImportSchedule from '../components/ImportSchedule'
+import OverlayView from '../components/OverlayView'
+import SettingsPanel from '../components/SettingsPanel'
+import ThemeToggle from '../components/ThemeToggle'
+import TodayView from '../components/TodayView'
 import WeekGrid from '../components/WeekGrid'
 import WeekNav from '../components/WeekNav'
-import GroupsPanel from '../components/GroupsPanel'
-import OverlayView from '../components/OverlayView'
 
 const TABS = [
+  { id: 'today', label: 'Dziś', icon: CalendarCheck },
   { id: 'plan', label: 'Mój plan', icon: CalendarDays },
   { id: 'groups', label: 'Grupy', icon: Users },
   { id: 'overlay', label: 'Wspólne okienka', icon: Layers },
+  { id: 'settings', label: 'Ustawienia', icon: SettingsIcon },
 ]
 
 export default function Dashboard() {
   const { user, profile, signOut } = useAuth()
 
-  const [tab, setTab] = useState('plan')
+  const [storedTab, setTab] = usePersistentState('freetime:tab', 'today')
+  const tab = TABS.some((item) => item.id === storedTab) ? storedTab : 'today'
+
   const [weekStart, setWeekStart] = useState(defaultWeekStart)
   const [events, setEvents] = useState([])
   const [loadingEvents, setLoadingEvents] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [offlineNote, setOfflineNote] = useState('')
+  const [syncTick, setSyncTick] = useState(0) // zmiana = widoki grup pobierają dane ponownie
 
   const name = profile?.display_name ?? user?.email
   const userId = user?.id
@@ -40,9 +55,23 @@ export default function Dashboard() {
     try {
       const data = await fetchUserSchedule(userId)
       setEvents(data)
+      saveCache(`events:${userId}`, data)
       setLoadError('')
+      setOfflineNote('')
     } catch (err) {
-      setLoadError(`Nie udało się pobrać planu: ${err.message}`)
+      // Brak połączenia: pokazujemy ostatnio zapisany plan
+      const cached = loadCache(`events:${userId}`)
+      if (cached) {
+        setEvents(cached.data)
+        setLoadError('')
+        setOfflineNote(
+          `Brak połączenia z serwerem. Pokazuję plan zapisany ${new Date(
+            cached.savedAt
+          ).toLocaleString('pl-PL')}.`
+        )
+      } else {
+        setLoadError(`Nie udało się pobrać planu: ${err.message}`)
+      }
     } finally {
       setLoadingEvents(false)
     }
@@ -51,6 +80,12 @@ export default function Dashboard() {
   useEffect(() => {
     loadEvents()
   }, [loadEvents])
+
+  // Realtime: zmiany Twoich zajęć i składu grup oraz powrót do karty aplikacji
+  useRealtimeSync(userId, () => {
+    loadEvents()
+    setSyncTick((tick) => tick + 1)
+  })
 
   const weekEvents = eventsForWeek(events, weekStart)
   const myLayers = [
@@ -72,6 +107,7 @@ export default function Dashboard() {
             <span className="hidden text-sm text-slate-600 sm:inline">
               {name}
             </span>
+            <ThemeToggle />
             <button
               onClick={signOut}
               className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100"
@@ -101,6 +137,14 @@ export default function Dashboard() {
       </header>
 
       <main className="mx-auto flex max-w-5xl flex-col gap-6 p-4 sm:p-6">
+        {offlineNote && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {offlineNote}
+          </p>
+        )}
+
+        {tab === 'today' && <TodayView syncTick={syncTick} />}
+
         {tab === 'plan' && (
           <>
             <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
@@ -122,8 +166,8 @@ export default function Dashboard() {
                   <div className="flex flex-col gap-3">
                     {events.length === 0 && (
                       <p className="text-sm text-slate-500">
-                        Nie masz jeszcze zapisanych zajęć. Zaimportuj plik CSV
-                        poniżej.
+                        Nie masz jeszcze zapisanych zajęć. Zaimportuj plik
+                        poniżej albo dodaj własne wydarzenie.
                       </p>
                     )}
                     {events.length > 0 && weekEvents.length === 0 && (
@@ -138,13 +182,16 @@ export default function Dashboard() {
               </div>
             </section>
 
+            <CustomEvents events={events} onChanged={loadEvents} />
             <ImportSchedule onImported={loadEvents} />
           </>
         )}
 
         {tab === 'groups' && <GroupsPanel />}
 
-        {tab === 'overlay' && <OverlayView />}
+        {tab === 'overlay' && <OverlayView syncTick={syncTick} />}
+
+        {tab === 'settings' && <SettingsPanel onDataChanged={loadEvents} />}
       </main>
     </div>
   )

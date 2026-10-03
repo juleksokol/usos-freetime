@@ -1,5 +1,13 @@
-import { useEffect, useState } from 'react'
-import { AlertTriangle, Loader2, RefreshCw, Utensils } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import {
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  Loader2,
+  RefreshCw,
+  User,
+  Utensils,
+} from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import {
   DAY_NAMES,
@@ -15,9 +23,11 @@ import {
   formatDayMonth,
 } from '../lib/dateUtils'
 import { findCommonFreeSlots } from '../lib/freeSlots'
-import { fetchMyGroups } from '../lib/groupService'
-import { fetchUserSchedule } from '../lib/scheduleService'
+import { loadHidden, saveHidden } from '../lib/hiddenStore'
 import { minutesToTime } from '../lib/timeUtils'
+import useGroups from '../hooks/useGroups'
+import usePersistentState from '../hooks/usePersistentState'
+import useSchedules from '../hooks/useSchedules'
 import WeekGrid from './WeekGrid'
 import WeekNav from './WeekNav'
 
@@ -25,96 +35,79 @@ const DURATION_OPTIONS = [30, 45, 60, 90]
 const LUNCH_START = 11 * 60
 const LUNCH_END = 16 * 60
 
-export default function OverlayView() {
+export default function OverlayView({ syncTick = 0 }) {
   const { user } = useAuth()
   const userId = user?.id
 
-  const [groups, setGroups] = useState([])
-  const [groupsLoading, setGroupsLoading] = useState(true)
-  const [groupId, setGroupId] = useState('')
-  const [selected, setSelected] = useState([]) // id zaznaczonych osób
-  const [schedules, setSchedules] = useState({}) // userId -> wszystkie zajęcia
-  const [error, setError] = useState('')
+  const { groups, loading: groupsLoading, error: groupsError } = useGroups(syncTick)
+  const [storedGroupId, setStoredGroupId] = usePersistentState(
+    'freetime:lastGroup',
+    ''
+  )
+  const [hiddenState, setHiddenState] = useState({ groupId: null, ids: [] })
   const [weekStart, setWeekStart] = useState(defaultWeekStart)
-  const [minDuration, setMinDuration] = useState(45)
-  const [lunchOnly, setLunchOnly] = useState(false)
+  const [minDuration, setMinDuration] = usePersistentState(
+    'freetime:minDuration',
+    45
+  )
+  const [lunchOnly, setLunchOnly] = usePersistentState('freetime:lunchOnly', false)
 
-  // Pobranie grup użytkownika
-  useEffect(() => {
-    let cancelled = false
+  // Zapamiętana grupa albo pierwsza z listy (gdy zapamiętanej już nie ma)
+  const group = groups.find((item) => item.id === storedGroupId) ?? groups[0] ?? null
+  const groupId = group?.id ?? null
 
-    fetchMyGroups()
-      .then((data) => {
-        if (cancelled) return
-        setGroups(data)
-        if (data.length > 0) {
-          setGroupId(data[0].id)
-          setSelected(data[0].members.map((member) => member.userId))
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setError(`Nie udało się pobrać grup: ${err.message}`)
-      })
-      .finally(() => {
-        if (!cancelled) setGroupsLoading(false)
-      })
+  // Ukryte osoby w tej grupie (zapamiętywane w przeglądarce)
+  const hidden = useMemo(() => {
+    if (!groupId) return []
+    return hiddenState.groupId === groupId ? hiddenState.ids : loadHidden(groupId)
+  }, [hiddenState, groupId])
 
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  // Widoczne osoby = wszyscy członkowie grupy poza ukrytymi
+  const selectedIds = useMemo(
+    () =>
+      group
+        ? group.members
+            .map((member) => member.userId)
+            .filter((id) => !hidden.includes(id))
+        : [],
+    [group, hidden]
+  )
 
-  // Pobranie planów tylko tych zaznaczonych osób, których jeszcze nie mamy
-  // (osobno dla każdej osoby, żeby nie trafić w limit 1000 wierszy jednego zapytania)
-  useEffect(() => {
-    const missing = selected.filter((id) => !(id in schedules))
-    if (missing.length === 0) return
+  const {
+    schedules,
+    loading: loadingSchedules,
+    error: schedulesError,
+    refresh,
+  } = useSchedules(selectedIds, syncTick)
 
-    let cancelled = false
+  const error = groupsError || schedulesError
 
-    Promise.all(missing.map(async (id) => [id, await fetchUserSchedule(id)]))
-      .then((entries) => {
-        if (cancelled) return
-        setSchedules((previous) => ({
-          ...previous,
-          ...Object.fromEntries(entries),
-        }))
-        setError('')
-      })
-      .catch((err) => {
-        if (!cancelled) setError(`Nie udało się pobrać planów: ${err.message}`)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [selected, schedules])
-
-  const loadingSchedules =
-    !error && selected.some((id) => !(id in schedules))
-
-  const group = groups.find((item) => item.id === groupId) ?? null
-
-  const handleGroupChange = (id) => {
-    const next = groups.find((item) => item.id === id)
-    setGroupId(id)
-    setSelected(next ? next.members.map((member) => member.userId) : [])
+  const updateHidden = (next) => {
+    setHiddenState({ groupId, ids: next })
+    saveHidden(groupId, next)
   }
 
   const toggleMember = (memberId) => {
-    setSelected((previous) =>
-      previous.includes(memberId)
-        ? previous.filter((id) => id !== memberId)
-        : [...previous, memberId]
+    updateHidden(
+      hidden.includes(memberId)
+        ? hidden.filter((id) => id !== memberId)
+        : [...hidden, memberId]
     )
   }
 
-  const handleRefresh = () => {
-    setSchedules({})
-    setError('')
+  const showAll = () => updateHidden([])
+
+  const showOnlyMe = () => {
+    if (!group) return
+    updateHidden(
+      group.members
+        .map((member) => member.userId)
+        .filter((id) => id !== userId)
+    )
   }
 
-  // Kolor osoby jest stały (zależy od miejsca na liście członków grupy)
+  // Kolor osoby jest stały (zależy od miejsca na liście członków grupy),
+  // więc ukrywanie innych osób nie zmienia kolorów
   const colorOf = (memberId) => {
     const index = group
       ? group.members.findIndex((member) => member.userId === memberId)
@@ -123,13 +116,14 @@ export default function OverlayView() {
   }
 
   const activeMembers = group
-    ? group.members.filter((member) => selected.includes(member.userId))
+    ? group.members.filter((member) => !hidden.includes(member.userId))
     : []
 
   const layers = activeMembers.map((member) => ({
     id: member.userId,
     name:
       member.userId === userId ? `${member.displayName} (Ty)` : member.displayName,
+    watermark: member.displayName, // znak wodny z pseudonimem na zajęciach
     color: colorOf(member.userId),
     events: eventsForWeek(schedules[member.userId] ?? [], weekStart),
   }))
@@ -138,7 +132,7 @@ export default function OverlayView() {
     (member) => schedules[member.userId] && schedules[member.userId].length === 0
   )
 
-  // Wspólne okienka: czas, w którym WSZYSCY zaznaczeni mają wolne
+  // Wspólne okienka: czas, w którym WSZYSCY widoczni mają wolne
   const range = lunchOnly
     ? { dayStartMin: LUNCH_START, dayEndMin: LUNCH_END }
     : { dayStartMin: GRID_START_HOUR * 60, dayEndMin: GRID_END_HOUR * 60 }
@@ -160,7 +154,7 @@ export default function OverlayView() {
     return <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
   }
 
-  if (groups.length === 0) {
+  if (!group) {
     return (
       <p className="rounded-2xl bg-white p-6 text-sm text-slate-500 shadow">
         Najpierw utwórz grupę lub dołącz do istniejącej w zakładce „Grupy”.
@@ -172,6 +166,9 @@ export default function OverlayView() {
   const selectClass =
     'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
 
+  const quickButtonClass =
+    'flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100'
+
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow sm:p-6">
@@ -180,7 +177,7 @@ export default function OverlayView() {
             Grupa:
             <select
               value={groupId}
-              onChange={(e) => handleGroupChange(e.target.value)}
+              onChange={(e) => setStoredGroupId(e.target.value)}
               className={selectClass}
             >
               {groups.map((item) => (
@@ -194,7 +191,7 @@ export default function OverlayView() {
           <div className="flex flex-wrap items-center gap-2">
             <WeekNav weekStart={weekStart} onChange={setWeekStart} />
             <button
-              onClick={handleRefresh}
+              onClick={refresh}
               className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100"
               aria-label="Odśwież plany"
               title="Odśwież plany"
@@ -204,39 +201,76 @@ export default function OverlayView() {
           </div>
         </div>
 
-        {group && (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-slate-500">
+              Kliknij osobę, aby ukryć lub pokazać jej plan. Ukryte osoby nie są
+              brane pod uwagę przy szukaniu okienek.
+            </p>
+            <div className="flex gap-2">
+              <button type="button" onClick={showAll} className={quickButtonClass}>
+                <Eye className="h-4 w-4" />
+                Pokaż wszystkich
+              </button>
+              <button type="button" onClick={showOnlyMe} className={quickButtonClass}>
+                <User className="h-4 w-4" />
+                Tylko ja
+              </button>
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-2">
             {group.members.map((member) => {
-              const checked = selected.includes(member.userId)
-              const noPlan = schedules[member.userId]?.length === 0
+              const visible = !hidden.includes(member.userId)
+              const memberEvents = schedules[member.userId]
+              const noPlan = memberEvents?.length === 0
+              const masked = memberEvents?.some((event) => event.is_masked)
 
               return (
-                <label
+                <button
                   key={member.userId}
-                  className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
-                    checked
-                      ? 'border-slate-300 bg-white text-slate-800'
-                      : 'border-slate-200 bg-slate-50 text-slate-400'
+                  type="button"
+                  onClick={() => toggleMember(member.userId)}
+                  aria-pressed={visible}
+                  title={visible ? 'Ukryj tę osobę' : 'Pokaż tę osobę'}
+                  className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
+                    visible
+                      ? 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                      : 'border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100'
                   }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleMember(member.userId)}
-                    className="h-4 w-4 accent-indigo-600"
-                  />
                   <span
                     className="h-3 w-3 rounded-full"
-                    style={{ backgroundColor: colorOf(member.userId) }}
+                    style={{
+                      backgroundColor: colorOf(member.userId),
+                      opacity: visible ? 1 : 0.35,
+                    }}
                   />
-                  {member.displayName}
-                  {member.userId === userId && ' (Ty)'}
-                  {noPlan && ' (brak planu)'}
-                </label>
+                  <span className={visible ? '' : 'line-through'}>
+                    {member.displayName}
+                    {member.userId === userId && ' (Ty)'}
+                  </span>
+                  {noPlan && (
+                    <span className="text-xs text-amber-600">brak planu</span>
+                  )}
+                  {masked && (
+                    <span
+                      className="text-xs text-slate-400"
+                      title="Ta osoba udostępnia tylko godziny zajęć"
+                    >
+                      tylko godziny
+                    </span>
+                  )}
+                  {visible ? (
+                    <Eye className="h-4 w-4 text-slate-500" />
+                  ) : (
+                    <EyeOff className="h-4 w-4" />
+                  )}
+                </button>
               )
             })}
           </div>
-        )}
+        </div>
 
         <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4 text-sm text-slate-600">
           <label className="flex items-center gap-2">
@@ -286,8 +320,8 @@ export default function OverlayView() {
           Nałożone plany
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Zielone, przerywane pola to wspólne okienka: wszyscy zaznaczeni mają
-          wtedy wolne.
+          Pseudonim przy zajęciach pokazuje, do kogo należą. Zielone, przerywane
+          pola to wspólne okienka widocznych osób.
         </p>
 
         <div className="mt-4">
@@ -295,7 +329,7 @@ export default function OverlayView() {
             <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
           ) : layers.length === 0 ? (
             <p className="text-sm text-slate-500">
-              Zaznacz co najmniej jedną osobę.
+              Wszyscy są ukryci. Pokaż co najmniej jedną osobę.
             </p>
           ) : (
             <WeekGrid layers={layers} highlights={slots} weekStart={weekStart} />
@@ -309,11 +343,18 @@ export default function OverlayView() {
           Wspólne okienka w tym tygodniu
         </h2>
 
+        {layers.length > 0 && (
+          <p className="mt-1 text-sm text-slate-500">
+            Liczone dla: {layers.map((layer) => layer.watermark).join(', ')}.
+          </p>
+        )}
+
         {loadingSchedules || layers.length === 0 ? null : slotsByDay.length ===
           0 ? (
           <p className="mt-3 text-sm text-slate-500">
             Brak wspólnych okienek spełniających warunki. Spróbuj skrócić
-            minimalną długość lub wyłączyć filtr pory obiadu.
+            minimalną długość, wyłączyć filtr pory obiadu albo ukryć kogoś z
+            ekipy.
           </p>
         ) : (
           <ul className="mt-3 flex flex-col gap-3">

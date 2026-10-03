@@ -25,7 +25,8 @@ function labelOffsetClass(hour) {
 }
 
 /**
- * layers:     [{ id, name, color, events: [...] }]
+ * layers:     [{ id, name, color, watermark?, events: [...] }]
+ *             watermark = tekst (np. pseudonim) wyświetlany jako znak wodny na zajęciach
  * highlights: [{ day, startMin, endMin }]  (opcjonalnie, np. wspólne okienka)
  * weekStart:  "RRRR-MM-DD" poniedziałku (opcjonalnie, pokazuje daty w nagłówku)
  */
@@ -54,6 +55,8 @@ export default function WeekGrid({ layers, highlights = [], weekStart }) {
         key: `${layer.id}-${event.id ?? `${event.day_of_week}-${rawStart}-${event.title}`}`,
         event,
         color: layer.color,
+        ownerName: layer.name,
+        watermark: layer.watermark ?? null,
         laneIndex,
         start,
         end,
@@ -162,6 +165,12 @@ export default function WeekGrid({ layers, highlights = [], weekStart }) {
                   const height = Math.max(toPx(block.end) - toPx(block.start), 18)
                   const { event } = block
 
+                  // Znak wodny pomijamy na bardzo krótkich blokach, żeby nie zasłaniał nazwy
+                  const hasWatermark = Boolean(block.watermark) && height >= 32
+                  const showTime = height >= (hasWatermark ? 46 : 40)
+                  const showLocation =
+                    Boolean(event.location) && height >= (hasWatermark ? 66 : 54)
+
                   return (
                     <div
                       key={block.key}
@@ -175,6 +184,7 @@ export default function WeekGrid({ layers, highlights = [], weekStart }) {
                         borderLeftColor: block.color,
                       }}
                       title={[
+                        block.watermark ? `Osoba: ${block.ownerName}` : null,
                         event.title,
                         `${event.start_time.slice(0, 5)}–${event.end_time.slice(0, 5)}`,
                         event.location,
@@ -185,16 +195,25 @@ export default function WeekGrid({ layers, highlights = [], weekStart }) {
                         .join('\n')}
                     >
                       <div className="truncate font-semibold">{event.title}</div>
-                      {height >= 40 && (
+                      {showTime && (
                         <div className="truncate text-slate-600">
                           {event.start_time.slice(0, 5)}–
                           {event.end_time.slice(0, 5)}
                         </div>
                       )}
-                      {height >= 54 && event.location && (
+                      {showLocation && (
                         <div className="truncate text-slate-500">
                           {event.location}
                         </div>
+                      )}
+
+                      {hasWatermark && (
+                        <span
+                          className="pointer-events-none absolute bottom-0.5 right-1 max-w-[85%] truncate text-[9px] font-bold uppercase tracking-wide opacity-50"
+                          style={{ color: block.color }}
+                        >
+                          {block.watermark}
+                        </span>
                       )}
                     </div>
                   )

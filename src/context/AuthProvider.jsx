@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { clearAllCaches } from '../lib/offlineCache'
 import { AuthContext } from './AuthContext'
 
 export default function AuthProvider({ children }) {
@@ -48,6 +49,19 @@ export default function AuthProvider({ children }) {
     }
   }, [userId])
 
+  // Ponowne pobranie profilu (po zmianie pseudonimu lub ustawień prywatności)
+  const refreshProfile = useCallback(async () => {
+    if (!userId) return
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (!error) setProfile(data)
+  }, [userId])
+
   const signIn = (email, password) =>
     supabase.auth.signInWithPassword({ email, password })
 
@@ -58,13 +72,17 @@ export default function AuthProvider({ children }) {
       options: { data: { display_name: displayName } },
     })
 
-  const signOut = () => supabase.auth.signOut()
+  const signOut = async () => {
+    clearAllCaches()
+    return supabase.auth.signOut()
+  }
 
   const value = {
     session,
     user: session?.user ?? null,
     profile,
     loading,
+    refreshProfile,
     signIn,
     signUp,
     signOut,
