@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { CalendarPlus, Pencil, Trash2, X } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, Pencil, Trash2, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { DAY_NAMES } from '../lib/constants'
+import { findConflicts, groupConflicts } from '../lib/conflicts'
 import { formatDate, weekdayOf } from '../lib/dateUtils'
 import {
   createCustomEvent,
@@ -112,6 +113,13 @@ export default function CustomEvents({ events, onChanged }) {
         ) || a.start_time.localeCompare(b.start_time)
     )
 
+  // Kolizje liczone na bieżąco (z zajęciami z planu i innymi własnymi wydarzeniami)
+  const payload = buildPayload(form)
+  const conflictGroups = payload.fields
+    ? groupConflicts(findConflicts(payload.fields, events, editingId))
+    : []
+  const hasConflicts = conflictGroups.length > 0
+
   const setField = (field) => (e) =>
     setForm((previous) => ({ ...previous, [field]: e.target.value }))
 
@@ -124,9 +132,8 @@ export default function CustomEvents({ events, onChanged }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    const { fields, error: validationError } = buildPayload(form)
-    if (validationError) {
-      setError(validationError)
+    if (payload.error) {
+      setError(payload.error)
       return
     }
 
@@ -135,9 +142,9 @@ export default function CustomEvents({ events, onChanged }) {
 
     try {
       if (editingId) {
-        await updateCustomEvent(editingId, fields)
+        await updateCustomEvent(editingId, payload.fields)
       } else {
-        await createCustomEvent(user.id, fields)
+        await createCustomEvent(user.id, payload.fields)
       }
       resetForm()
       await onChanged?.()
@@ -179,7 +186,8 @@ export default function CustomEvents({ events, onChanged }) {
       </h2>
       <p className="mt-1 text-sm text-slate-500">
         Praca, trening, spotkania: dodane wpisy blokują czas w planie i we
-        wspólnych okienkach. Zostają po ponownym imporcie planu.
+        wspólnych okienkach (na siatce mają przerywaną ramkę). Zostają po
+        ponownym imporcie planu.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
@@ -298,6 +306,32 @@ export default function CustomEvents({ events, onChanged }) {
           </label>
         </div>
 
+        {hasConflicts && (
+          <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <p className="flex items-center gap-2 font-medium">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Kolizja z Twoim planem ({conflictGroups.length}):
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {conflictGroups.slice(0, 5).map((group) => (
+                <li key={`${group.event.title}-${group.event.start_time}-${group.event.day_of_week}`}>
+                  {group.event.title} ({DAY_NAMES[group.event.day_of_week]}{' '}
+                  {group.event.start_time.slice(0, 5)}–
+                  {group.event.end_time.slice(0, 5)}
+                  {group.event.source === 'custom' ? ', własne wydarzenie' : ''}
+                  ){' '}
+                  {group.dates.length === 1
+                    ? `, ${formatDate(group.dates[0])}`
+                    : `, ${group.dates.length} terminów, od ${formatDate(group.dates[0])}`}
+                </li>
+              ))}
+              {conflictGroups.length > 5 && (
+                <li>…i {conflictGroups.length - 5} więcej</li>
+              )}
+            </ul>
+          </div>
+        )}
+
         {error && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
@@ -308,9 +342,17 @@ export default function CustomEvents({ events, onChanged }) {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+              hasConflicts
+                ? 'bg-amber-600 hover:bg-amber-700'
+                : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}
           >
-            {editingId ? 'Zapisz zmiany' : 'Dodaj wydarzenie'}
+            {hasConflicts
+              ? 'Zapisz mimo kolizji'
+              : editingId
+                ? 'Zapisz zmiany'
+                : 'Dodaj wydarzenie'}
           </button>
           {editingId && (
             <button

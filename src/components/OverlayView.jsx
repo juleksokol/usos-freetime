@@ -9,13 +9,8 @@ import {
   Utensils,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import {
-  DAY_NAMES,
-  GRID_END_HOUR,
-  GRID_START_HOUR,
-  PERSON_COLORS,
-  WORKDAYS,
-} from '../lib/constants'
+import { useSettings } from '../context/SettingsContext'
+import { ALL_DAYS, DAY_NAMES, WORKDAYS, getPalette } from '../lib/constants'
 import {
   addDays,
   defaultWeekStart,
@@ -32,11 +27,10 @@ import WeekGrid from './WeekGrid'
 import WeekNav from './WeekNav'
 
 const DURATION_OPTIONS = [30, 45, 60, 90]
-const LUNCH_START = 11 * 60
-const LUNCH_END = 16 * 60
 
 export default function OverlayView({ syncTick = 0 }) {
   const { user } = useAuth()
+  const { settings, updateSettings } = useSettings()
   const userId = user?.id
 
   const { groups, loading: groupsLoading, error: groupsError } = useGroups(syncTick)
@@ -46,11 +40,9 @@ export default function OverlayView({ syncTick = 0 }) {
   )
   const [hiddenState, setHiddenState] = useState({ groupId: null, ids: [] })
   const [weekStart, setWeekStart] = useState(defaultWeekStart)
-  const [minDuration, setMinDuration] = usePersistentState(
-    'freetime:minDuration',
-    45
-  )
-  const [lunchOnly, setLunchOnly] = usePersistentState('freetime:lunchOnly', false)
+
+  const palette = getPalette(settings.personPalette)
+  const days = settings.showWeekend ? ALL_DAYS : WORKDAYS
 
   // Zapamiętana grupa albo pierwsza z listy (gdy zapamiętanej już nie ma)
   const group = groups.find((item) => item.id === storedGroupId) ?? groups[0] ?? null
@@ -112,7 +104,7 @@ export default function OverlayView({ syncTick = 0 }) {
     const index = group
       ? group.members.findIndex((member) => member.userId === memberId)
       : 0
-    return PERSON_COLORS[Math.max(index, 0) % PERSON_COLORS.length]
+    return palette[Math.max(index, 0) % palette.length]
   }
 
   const activeMembers = group
@@ -133,22 +125,30 @@ export default function OverlayView({ syncTick = 0 }) {
   )
 
   // Wspólne okienka: czas, w którym WSZYSCY widoczni mają wolne
-  const range = lunchOnly
-    ? { dayStartMin: LUNCH_START, dayEndMin: LUNCH_END }
-    : { dayStartMin: GRID_START_HOUR * 60, dayEndMin: GRID_END_HOUR * 60 }
+  const range = settings.lunchOnly
+    ? {
+        dayStartMin: settings.lunchStart * 60,
+        dayEndMin: settings.lunchEnd * 60,
+      }
+    : {
+        dayStartMin: settings.gridStartHour * 60,
+        dayEndMin: settings.gridEndHour * 60,
+      }
 
   const slots =
     layers.length > 0
       ? findCommonFreeSlots(
           layers.flatMap((layer) => layer.events),
-          { ...range, minDuration }
+          { ...range, minDuration: settings.minDuration, days }
         )
       : []
 
-  const slotsByDay = WORKDAYS.map((day) => ({
-    day,
-    slots: slots.filter((slot) => slot.day === day),
-  })).filter((entry) => entry.slots.length > 0)
+  const slotsByDay = days
+    .map((day) => ({
+      day,
+      slots: slots.filter((slot) => slot.day === day),
+    }))
+    .filter((entry) => entry.slots.length > 0)
 
   if (groupsLoading) {
     return <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
@@ -276,8 +276,8 @@ export default function OverlayView({ syncTick = 0 }) {
           <label className="flex items-center gap-2">
             Minimalna długość okienka:
             <select
-              value={minDuration}
-              onChange={(e) => setMinDuration(Number(e.target.value))}
+              value={settings.minDuration}
+              onChange={(e) => updateSettings({ minDuration: Number(e.target.value) })}
               className={selectClass}
             >
               {DURATION_OPTIONS.map((minutes) => (
@@ -291,11 +291,11 @@ export default function OverlayView({ syncTick = 0 }) {
           <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
-              checked={lunchOnly}
-              onChange={(e) => setLunchOnly(e.target.checked)}
+              checked={settings.lunchOnly}
+              onChange={(e) => updateSettings({ lunchOnly: e.target.checked })}
               className="h-4 w-4 accent-indigo-600"
             />
-            Tylko pora obiadu (11:00–16:00)
+            Tylko pora obiadu ({settings.lunchStart}:00–{settings.lunchEnd}:00)
           </label>
         </div>
       </section>
@@ -320,8 +320,8 @@ export default function OverlayView({ syncTick = 0 }) {
           Nałożone plany
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Pseudonim przy zajęciach pokazuje, do kogo należą. Zielone, przerywane
-          pola to wspólne okienka widocznych osób.
+          Kliknij kafelek, aby zobaczyć wszystkie informacje. Zielone,
+          przerywane pola to wspólne okienka widocznych osób.
         </p>
 
         <div className="mt-4">
@@ -337,51 +337,53 @@ export default function OverlayView({ syncTick = 0 }) {
         </div>
       </section>
 
-      <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <Utensils className="h-5 w-5 text-green-600" />
-          Wspólne okienka w tym tygodniu
-        </h2>
+      {!settings.hiddenPanels.includes('overlaySlots') && (
+        <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+            <Utensils className="h-5 w-5 text-green-600" />
+            Wspólne okienka w tym tygodniu
+          </h2>
 
-        {layers.length > 0 && (
-          <p className="mt-1 text-sm text-slate-500">
-            Liczone dla: {layers.map((layer) => layer.watermark).join(', ')}.
-          </p>
-        )}
+          {layers.length > 0 && (
+            <p className="mt-1 text-sm text-slate-500">
+              Liczone dla: {layers.map((layer) => layer.watermark).join(', ')}.
+            </p>
+          )}
 
-        {loadingSchedules || layers.length === 0 ? null : slotsByDay.length ===
-          0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            Brak wspólnych okienek spełniających warunki. Spróbuj skrócić
-            minimalną długość, wyłączyć filtr pory obiadu albo ukryć kogoś z
-            ekipy.
-          </p>
-        ) : (
-          <ul className="mt-3 flex flex-col gap-3">
-            {slotsByDay.map(({ day, slots: daySlots }) => (
-              <li
-                key={day}
-                className="flex flex-wrap items-center gap-2 text-sm"
-              >
-                <span className="w-40 font-medium text-slate-700">
-                  {DAY_NAMES[day]} {formatDayMonth(addDays(weekStart, day - 1))}
-                </span>
-                {daySlots.map((slot) => (
-                  <span
-                    key={`${slot.startMin}-${slot.endMin}`}
-                    className="rounded-full bg-green-100 px-3 py-1 font-medium text-green-800"
-                  >
-                    {minutesToTime(slot.startMin)}–{minutesToTime(slot.endMin)}{' '}
-                    <span className="font-normal text-green-600">
-                      ({slot.endMin - slot.startMin} min)
-                    </span>
+          {loadingSchedules || layers.length === 0 ? null : slotsByDay.length ===
+            0 ? (
+            <p className="mt-3 text-sm text-slate-500">
+              Brak wspólnych okienek spełniających warunki. Spróbuj skrócić
+              minimalną długość, wyłączyć filtr pory obiadu albo ukryć kogoś z
+              ekipy.
+            </p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-3">
+              {slotsByDay.map(({ day, slots: daySlots }) => (
+                <li
+                  key={day}
+                  className="flex flex-wrap items-center gap-2 text-sm"
+                >
+                  <span className="w-40 font-medium text-slate-700">
+                    {DAY_NAMES[day]} {formatDayMonth(addDays(weekStart, day - 1))}
                   </span>
-                ))}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                  {daySlots.map((slot) => (
+                    <span
+                      key={`${slot.startMin}-${slot.endMin}`}
+                      className="rounded-full bg-green-100 px-3 py-1 font-medium text-green-800"
+                    >
+                      {minutesToTime(slot.startMin)}–{minutesToTime(slot.endMin)}{' '}
+                      <span className="font-normal text-green-600">
+                        ({slot.endMin - slot.startMin} min)
+                      </span>
+                    </span>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   )
 }

@@ -26,6 +26,11 @@ export function todayISO() {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
+// Liczba dni od daty a do daty b (ujemna, gdy b jest wcześniejsza)
+export function daysBetween(isoA, isoB) {
+  return Math.round((parseISO(isoB) - parseISO(isoA)) / 86400000)
+}
+
 // Dzień tygodnia daty: 1 = poniedziałek ... 7 = niedziela
 export function weekdayOf(iso) {
   return parseISO(iso).getUTCDay() || 7

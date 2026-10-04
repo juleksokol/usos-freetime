@@ -7,11 +7,8 @@ import {
   Utensils,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import {
-  GRID_END_HOUR,
-  GRID_START_HOUR,
-  PERSON_COLORS,
-} from '../lib/constants'
+import { useSettings } from '../context/SettingsContext'
+import { ALL_DAYS, WORKDAYS, getPalette } from '../lib/constants'
 import {
   addDays,
   eventsOnDate,
@@ -60,6 +57,7 @@ function statusNow(events, nowMin) {
 
 export default function TodayView({ syncTick = 0 }) {
   const { user, profile } = useAuth()
+  const { settings } = useSettings()
   const userId = user?.id
   const myName = profile?.display_name ?? 'Ja'
 
@@ -68,7 +66,6 @@ export default function TodayView({ syncTick = 0 }) {
     'freetime:lastGroup',
     ''
   )
-  const [minDuration] = usePersistentState('freetime:minDuration', 45)
   const [date, setDate] = useState(todayISO)
   const [nowMin, setNowMin] = useState(currentMinutes)
 
@@ -76,6 +73,12 @@ export default function TodayView({ syncTick = 0 }) {
     const timer = setInterval(() => setNowMin(currentMinutes()), 60000)
     return () => clearInterval(timer)
   }, [])
+
+  const palette = getPalette(settings.personPalette)
+  const days = settings.showWeekend ? ALL_DAYS : WORKDAYS
+  const startMin = settings.gridStartHour * 60
+  const endMin = settings.gridEndHour * 60
+  const showPanel = (id) => !settings.hiddenPanels.includes(id)
 
   const group = groups.find((item) => item.id === storedGroupId) ?? groups[0] ?? null
 
@@ -93,27 +96,26 @@ export default function TodayView({ syncTick = 0 }) {
     const index = group
       ? group.members.findIndex((member) => member.userId === memberId)
       : 0
-    return PERSON_COLORS[Math.max(index, 0) % PERSON_COLORS.length]
+    return palette[Math.max(index, 0) % palette.length]
   }
 
   const isToday = date === todayISO()
   const weekday = weekdayOf(date)
-  const isWeekend = weekday >= 6
+  const dayIncluded = days.includes(weekday)
 
   const dayEvents = (memberId) => eventsOnDate(schedules[memberId] ?? [], date)
 
-  const windowStart = isToday
-    ? Math.max(GRID_START_HOUR * 60, nowMin)
-    : GRID_START_HOUR * 60
+  const windowStart = isToday ? Math.max(startMin, nowMin) : startMin
 
   const slots =
-    !loading && members.length > 0 && !isWeekend
+    !loading && members.length > 0 && dayIncluded
       ? findCommonFreeSlots(
           members.flatMap((member) => dayEvents(member.userId)),
           {
             dayStartMin: windowStart,
-            dayEndMin: GRID_END_HOUR * 60,
-            minDuration,
+            dayEndMin: endMin,
+            minDuration: settings.minDuration,
+            days,
           }
         ).filter((slot) => slot.day === weekday)
       : []
@@ -194,7 +196,7 @@ export default function TodayView({ syncTick = 0 }) {
         </p>
       ) : (
         <>
-          {isToday && !isWeekend && (
+          {showPanel('now') && isToday && dayIncluded && (
             <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
               <h3 className="text-base font-semibold text-slate-800">Teraz</h3>
               <ul className="mt-3 flex flex-col gap-2">
@@ -230,86 +232,91 @@ export default function TodayView({ syncTick = 0 }) {
             </section>
           )}
 
-          <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
-            <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800">
-              <Utensils className="h-5 w-5 text-green-600" />
-              Wspólne okienka {isToday ? '(od teraz)' : ''}
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Dla: {members.map((member) => member.displayName).join(', ')}.
-              Minimalna długość: {minDuration} min (zmienisz ją w zakładce
-              „Wspólne okienka”).
-            </p>
+          {showPanel('todaySlots') && (
+            <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
+              <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800">
+                <Utensils className="h-5 w-5 text-green-600" />
+                Wspólne okienka {isToday ? '(od teraz)' : ''}
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Dla: {members.map((member) => member.displayName).join(', ')}.
+                Minimalna długość: {settings.minDuration} min (zmienisz ją w
+                Ustawieniach).
+              </p>
 
-            {isWeekend ? (
-              <p className="mt-3 text-sm text-slate-500">
-                To weekend, a wspólne okienka są liczone dla dni Pon–Pt.
-              </p>
-            ) : slots.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">
-                Brak wspólnych okienek w tym dniu.
-              </p>
-            ) : (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {slots.map((slot) => (
-                  <span
-                    key={`${slot.startMin}-${slot.endMin}`}
-                    className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800"
-                  >
-                    {minutesToTime(slot.startMin)}–{minutesToTime(slot.endMin)}{' '}
-                    <span className="font-normal text-green-600">
-                      ({slot.endMin - slot.startMin} min)
+              {!dayIncluded ? (
+                <p className="mt-3 text-sm text-slate-500">
+                  Ten dzień nie jest uwzględniany w okienkach (weekend możesz
+                  włączyć w Ustawieniach).
+                </p>
+              ) : slots.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-500">
+                  Brak wspólnych okienek w tym dniu.
+                </p>
+              ) : (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {slots.map((slot) => (
+                    <span
+                      key={`${slot.startMin}-${slot.endMin}`}
+                      className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800"
+                    >
+                      {minutesToTime(slot.startMin)}–{minutesToTime(slot.endMin)}{' '}
+                      <span className="font-normal text-green-600">
+                        ({slot.endMin - slot.startMin} min)
+                      </span>
                     </span>
-                  </span>
-                ))}
-              </div>
-            )}
-          </section>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            {members.map((member) => {
-              const events = dayEvents(member.userId).sort((a, b) =>
-                a.start_time.localeCompare(b.start_time)
-              )
+          {showPanel('todayPeople') && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {members.map((member) => {
+                const events = dayEvents(member.userId).sort((a, b) =>
+                  a.start_time.localeCompare(b.start_time)
+                )
 
-              return (
-                <article
-                  key={member.userId}
-                  className="rounded-2xl bg-white p-4 shadow sm:p-6"
-                  style={{ borderTop: `4px solid ${colorOf(member.userId)}` }}
-                >
-                  <h3 className="font-semibold text-slate-800">
-                    {member.displayName}
-                    {member.userId === userId && ' (Ty)'}
-                  </h3>
+                return (
+                  <article
+                    key={member.userId}
+                    className="rounded-2xl bg-white p-4 shadow sm:p-6"
+                    style={{ borderTop: `4px solid ${colorOf(member.userId)}` }}
+                  >
+                    <h3 className="font-semibold text-slate-800">
+                      {member.displayName}
+                      {member.userId === userId && ' (Ty)'}
+                    </h3>
 
-                  {events.length === 0 ? (
-                    <p className="mt-2 text-sm text-slate-500">
-                      Brak zajęć tego dnia.
-                    </p>
-                  ) : (
-                    <ul className="mt-2 divide-y divide-slate-100">
-                      {events.map((event) => (
-                        <li key={event.id} className="py-2 text-sm">
-                          <div className="font-medium text-slate-800">
-                            {event.start_time.slice(0, 5)}–
-                            {event.end_time.slice(0, 5)} {event.title}
-                          </div>
-                          {(event.location || event.event_type) && (
-                            <div className="text-xs text-slate-500">
-                              {[event.event_type, event.location]
-                                .filter(Boolean)
-                                .join(' · ')}
+                    {events.length === 0 ? (
+                      <p className="mt-2 text-sm text-slate-500">
+                        Brak zajęć tego dnia.
+                      </p>
+                    ) : (
+                      <ul className="mt-2 divide-y divide-slate-100">
+                        {events.map((event) => (
+                          <li key={event.id} className="py-2 text-sm">
+                            <div className="font-medium text-slate-800">
+                              {event.start_time.slice(0, 5)}–
+                              {event.end_time.slice(0, 5)} {event.title}
                             </div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </article>
-              )
-            })}
-          </div>
+                            {(event.location || event.event_type) && (
+                              <div className="text-xs text-slate-500">
+                                {[event.event_type, event.location]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </article>
+                )
+              })}
+            </div>
+          )}
         </>
       )}
     </div>

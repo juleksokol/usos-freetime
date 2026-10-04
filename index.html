@@ -20,12 +20,21 @@
     <title>USOS FreeTime</title>
     <script>
       try {
-        var stored = localStorage.getItem('freetime:theme');
+        var raw = localStorage.getItem('freetime:settings');
+        var s = raw ? JSON.parse(raw) : {};
+        if (!raw) {
+          var legacy = localStorage.getItem('freetime:theme');
+          if (legacy === 'dark' || legacy === 'light') s.theme = legacy;
+        }
+        var root = document.documentElement;
         var dark =
-          stored === 'dark' ||
-          (stored !== 'light' &&
+          s.theme === 'dark' ||
+          (s.theme !== 'light' &&
             window.matchMedia('(prefers-color-scheme: dark)').matches);
-        if (dark) document.documentElement.classList.add('dark');
+        if (dark) root.classList.add('dark');
+        if (s.accent) root.classList.add('accent-' + s.accent);
+        var sizes = { small: '14px', large: '18px' };
+        if (sizes[s.fontScale]) root.style.fontSize = sizes[s.fontScale];
       } catch (e) {}
     </script>
   </head>

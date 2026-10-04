@@ -12,6 +12,68 @@ body {
   color: #1e293b;
 }
 
+/* ===== Kolor akcentu: paleta "indigo" w całej aplikacji jest podmieniana na wybrany akcent ===== */
+:root {
+  --accent-50: #eef2ff;
+  --accent-200: #c7d2fe;
+  --accent-400: #818cf8;
+  --accent-500: #6366f1;
+  --accent-600: #4f46e5;
+  --accent-700: #4338ca;
+
+  --color-indigo-50: var(--accent-50);
+  --color-indigo-200: var(--accent-200);
+  --color-indigo-400: var(--accent-400);
+  --color-indigo-500: var(--accent-500);
+  --color-indigo-600: var(--accent-600);
+  --color-indigo-700: var(--accent-700);
+}
+
+.accent-blue {
+  --accent-50: #eff6ff;
+  --accent-200: #bfdbfe;
+  --accent-400: #60a5fa;
+  --accent-500: #3b82f6;
+  --accent-600: #2563eb;
+  --accent-700: #1d4ed8;
+}
+
+.accent-emerald {
+  --accent-50: #ecfdf5;
+  --accent-200: #a7f3d0;
+  --accent-400: #34d399;
+  --accent-500: #10b981;
+  --accent-600: #059669;
+  --accent-700: #047857;
+}
+
+.accent-rose {
+  --accent-50: #fff1f2;
+  --accent-200: #fecdd3;
+  --accent-400: #fb7185;
+  --accent-500: #f43f5e;
+  --accent-600: #e11d48;
+  --accent-700: #be123c;
+}
+
+.accent-orange {
+  --accent-50: #fff7ed;
+  --accent-200: #fed7aa;
+  --accent-400: #fb923c;
+  --accent-500: #f97316;
+  --accent-600: #ea580c;
+  --accent-700: #c2410c;
+}
+
+.accent-violet {
+  --accent-50: #f5f3ff;
+  --accent-200: #ddd6fe;
+  --accent-400: #a78bfa;
+  --accent-500: #8b5cf6;
+  --accent-600: #7c3aed;
+  --accent-700: #6d28d9;
+}
+
 /* ===== Tryb ciemny: klasa "dark" na elemencie <html> podmienia paletę ===== */
 .dark {
   color-scheme: dark;
@@ -43,7 +105,7 @@ body {
   --color-amber-600: #fbbf24;
   --color-amber-800: #fcd34d;
 
-  --color-indigo-50: #1e1b4b;
+  --color-indigo-50: color-mix(in srgb, var(--accent-600) 22%, #1e293b);
 }
 
 .dark body {
@@ -56,5 +118,5 @@ body {
 }
 
 .dark .text-indigo-600 {
-  color: #818cf8;
+  color: var(--accent-400);
 }

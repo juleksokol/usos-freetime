@@ -10,7 +10,8 @@ import {
   Users,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { PERSON_COLORS } from '../lib/constants'
+import { useSettings } from '../context/SettingsContext'
+import { getPalette } from '../lib/constants'
 import { defaultWeekStart, eventsForWeek } from '../lib/dateUtils'
 import { loadCache, saveCache } from '../lib/offlineCache'
 import { fetchUserSchedule } from '../lib/scheduleService'
@@ -20,6 +21,7 @@ import CustomEvents from '../components/CustomEvents'
 import GroupsPanel from '../components/GroupsPanel'
 import ImportSchedule from '../components/ImportSchedule'
 import OverlayView from '../components/OverlayView'
+import PushupCounter from '../components/PushupCounter'
 import SettingsPanel from '../components/SettingsPanel'
 import ThemeToggle from '../components/ThemeToggle'
 import TodayView from '../components/TodayView'
@@ -36,9 +38,27 @@ const TABS = [
 
 export default function Dashboard() {
   const { user, profile, signOut } = useAuth()
+  const { settings } = useSettings()
 
-  const [storedTab, setTab] = usePersistentState('freetime:tab', 'today')
-  const tab = TABS.some((item) => item.id === storedTab) ? storedTab : 'today'
+  // Zakładka startowa: ostatnio używana albo wybrana w ustawieniach
+  const [lastTab, setLastTab] = usePersistentState('freetime:tab', 'today')
+  const [sessionTab, setSessionTab] = useState(() =>
+    settings.startTab === 'last' ? lastTab : settings.startTab
+  )
+
+  const visibleTabs = TABS.filter(
+    (item) => item.id === 'settings' || !settings.hiddenTabs.includes(item.id)
+  )
+  const tab = visibleTabs.some((item) => item.id === sessionTab)
+    ? sessionTab
+    : visibleTabs[0].id
+
+  const selectTab = (id) => {
+    setSessionTab(id)
+    setLastTab(id)
+  }
+
+  const showPanel = (id) => !settings.hiddenPanels.includes(id)
 
   const [weekStart, setWeekStart] = useState(defaultWeekStart)
   const [events, setEvents] = useState([])
@@ -89,7 +109,12 @@ export default function Dashboard() {
 
   const weekEvents = eventsForWeek(events, weekStart)
   const myLayers = [
-    { id: userId, name: 'Ja', color: PERSON_COLORS[0], events: weekEvents },
+    {
+      id: userId,
+      name: name ?? 'Ja',
+      color: getPalette(settings.personPalette)[0],
+      events: weekEvents,
+    },
   ]
 
   return (
@@ -119,10 +144,10 @@ export default function Dashboard() {
         </div>
 
         <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4">
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {visibleTabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => setTab(id)}
+              onClick={() => selectTab(id)}
               className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition ${
                 tab === id
                   ? 'border-indigo-600 text-indigo-600'
@@ -143,7 +168,12 @@ export default function Dashboard() {
           </p>
         )}
 
-        {tab === 'today' && <TodayView syncTick={syncTick} />}
+        {tab === 'today' && (
+          <>
+            {showPanel('pushups') && <PushupCounter />}
+            <TodayView syncTick={syncTick} />
+          </>
+        )}
 
         {tab === 'plan' && (
           <>
@@ -182,8 +212,10 @@ export default function Dashboard() {
               </div>
             </section>
 
-            <CustomEvents events={events} onChanged={loadEvents} />
-            <ImportSchedule onImported={loadEvents} />
+            {showPanel('customEvents') && (
+              <CustomEvents events={events} onChanged={loadEvents} />
+            )}
+            {showPanel('import') && <ImportSchedule onImported={loadEvents} />}
           </>
         )}
 

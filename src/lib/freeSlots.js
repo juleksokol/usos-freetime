@@ -6,17 +6,17 @@ import { timeToMinutes } from './timeUtils'
  *
  * events:  zajęcia wszystkich wybranych osób z jednego tygodnia
  *          (pola: day_of_week, start_time, end_time)
- * options: { dayStartMin, dayEndMin, minDuration } (w minutach)
+ * options: { dayStartMin, dayEndMin, minDuration, days } (minuty; days = dni tygodnia do sprawdzenia)
  *
  * Zwraca: [{ day, startMin, endMin }]
  */
 export function findCommonFreeSlots(
   events,
-  { dayStartMin, dayEndMin, minDuration }
+  { dayStartMin, dayEndMin, minDuration, days = WORKDAYS }
 ) {
   const slots = []
 
-  for (const day of WORKDAYS) {
+  for (const day of days) {
     const busy = events
       .filter((event) => event.day_of_week === day)
       .map((event) => [
