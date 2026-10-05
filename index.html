@@ -28,7 +28,7 @@
         }
         var root = document.documentElement;
         var dark =
-          s.theme === 'dark' ||
+          s.theme === 'dark' || 
           (s.theme !== 'light' &&
             window.matchMedia('(prefers-color-scheme: dark)').matches);
         if (dark) root.classList.add('dark');

@@ -1,4 +1,5 @@
 import Papa from 'papaparse'
+import { addDays } from './dateUtils'
 
 // Aliasy nazw kolumn (po normalizacji: małe litery, bez polskich znaków).
 // Kolejność pól ma znaczenie: pola "pierwszy/ostatni dzień" zajmują swoje kolumny
@@ -85,6 +86,12 @@ const WEEKDAY_PREFIXES = [
   ['nd', 7],
 ]
 
+// Skróty dni sklejane w jednym polu, np. "ŚrCz" (po normalizacji: "srcz")
+const DAY_CODES = { pn: 1, wt: 2, sr: 3, cz: 4, pt: 5, so: 6, nd: 7 }
+
+// Maksymalna liczba dni sprawdzanych przy rozwijaniu jednej serii zajęć
+const MAX_SERIES_DAYS = 400
+
 // Skróty rodzajów zajęć używane w planach
 const TYPE_LABELS = {
   WYK: 'Wykład',
@@ -165,6 +172,23 @@ function parseWeekday(value) {
   return null
 }
 
+// Zbiór dni tygodnia z pola typu "Pt", "Wtorek" albo "ŚrCz" (kilka dni sklejonych)
+function parseWeekdaySet(value) {
+  const compact = normalize(value).replace(/ /g, '')
+  const days = new Set()
+
+  for (const match of compact.matchAll(/pn|wt|sr|cz|pt|so|nd/g)) {
+    days.add(DAY_CODES[match[0]])
+  }
+
+  if (days.size === 0) {
+    const single = parseWeekday(value)
+    if (single) days.add(single)
+  }
+
+  return days
+}
+
 // Obsługuje RRRR-MM-DD oraz D.M.RRRR / DD.MM.RRRR (też z / i -). Zwraca "RRRR-MM-DD" lub null
 function parseDateISO(value) {
   const text = String(value ?? '')
@@ -195,6 +219,31 @@ function parseDateISO(value) {
 function weekdayFromISO(iso) {
   const jsDay = new Date(`${iso}T00:00:00Z`).getUTCDay() // 0 = niedziela
   return jsDay === 0 ? 7 : jsDay
+}
+
+/**
+ * Daty zajęć z wiersza typu UniTime ("pierwszy dzień" / "ostatni dzień" / "dzień tygodnia"):
+ *  - brak ostatniego dnia (albo taki sam jak pierwszy) = JEDNO spotkanie w pierwszym dniu,
+ *  - jest ostatni dzień = spotkania w dniach tygodnia z pola "dzień tygodnia" od pierwszego
+ *    do ostatniego dnia włącznie (pierwszy i ostatni dzień są zawsze spotkaniami).
+ */
+function seriesDates(first, last, weekdays) {
+  if (!last || last <= first) return [first]
+
+  const days = weekdays.size > 0 ? weekdays : new Set([weekdayFromISO(first)])
+  const dates = []
+
+  for (
+    let date = first, i = 0;
+    date <= last && i < MAX_SERIES_DAYS;
+    date = addDays(date, 1), i++
+  ) {
+    if (date === first || date === last || days.has(weekdayFromISO(date))) {
+      dates.push(date)
+    }
+  }
+
+  return dates
 }
 
 function formatTime(hours, minutes) {
@@ -265,31 +314,35 @@ export function parseUsosCsv(rawText) {
       continue
     }
 
-    // 1) Konkretna data zajęć (kolumna daty albo data ukryta w kolumnie startu)
+    // Daty tego wiersza. Jeden wiersz może opisywać serię spotkań.
+    //  1) konkretna data zajęć (kolumna daty albo data ukryta w kolumnie startu),
+    //  2) seria "pierwszy dzień" - "ostatni dzień" (format UniTime),
+    //  3) tylko dzień tygodnia: szablon cotygodniowy bez dat (jedna pozycja z event_date = null).
+    let dates = []
+
     let eventDate = null
     if (cell('date')) eventDate = parseDateISO(cell('date'))
     if (!eventDate && cell('start')) eventDate = parseDateISO(cell('start'))
 
-    // 2) Zajęcia cykliczne: "pierwszy dzień" [+ "ostatni dzień"], powtarzane co tydzień.
-    //    Brak ostatniego dnia = bez znanego końca. Ten sam pierwszy i ostatni dzień = jedno spotkanie.
-    let validFrom = null
-    let validUntil = null
-    if (!eventDate && columns.firstDay !== undefined) {
+    if (eventDate) {
+      dates = [eventDate]
+    } else if (columns.firstDay !== undefined) {
       const first = parseDateISO(cell('firstDay'))
-      const last = parseDateISO(cell('lastDay'))
-      if (first && last && first === last) {
-        eventDate = first
-      } else if (first) {
-        validFrom = first
-        validUntil = last && last > first ? last : null
+      if (first) {
+        dates = seriesDates(
+          first,
+          parseDateISO(cell('lastDay')),
+          parseWeekdaySet(cell('day'))
+        )
       }
+    } else {
+      dates = [null]
     }
 
-    // Dzień tygodnia: z daty (najpewniejsze) albo z nazwy dnia, a w ostateczności z pierwszego dnia
-    let day = eventDate ? weekdayFromISO(eventDate) : parseWeekday(cell('day'))
-    if (!day && validFrom) day = weekdayFromISO(validFrom)
+    // Dzień tygodnia dla szablonu bez dat
+    const templateDay = parseWeekday(cell('day'))
 
-    if (!day) {
+    if (dates.length === 0 || (dates[0] === null && !templateDay)) {
       warnings.push(`Wiersz ${lineNumber} („${title}"): nie rozpoznano dnia ani daty.`)
       continue
     }
@@ -331,34 +384,29 @@ export function parseUsosCsv(rawText) {
         ? 'Wirtualna'
         : [building, room].filter(Boolean).join(' ') || null
 
-    const event = {
-      title,
-      event_date: eventDate,
-      valid_from: validFrom,
-      valid_until: validUntil,
-      day_of_week: day,
-      start_time: start,
-      end_time: end,
-      location,
-      teacher: cell('teacher') || null,
-      event_type: normalizeType(cell('type')) || null,
-    }
+    for (const date of dates) {
+      const day = date ? weekdayFromISO(date) : templateDay
 
-    // Usuwanie dokładnych duplikatów
-    const key = [
-      eventDate ?? '',
-      validFrom ?? '',
-      validUntil ?? '',
-      day,
-      start,
-      end,
-      title,
-      location ?? '',
-    ].join('|')
-    if (!unique.has(key)) unique.set(key, event)
+      const event = {
+        title,
+        event_date: date,
+        valid_from: null,
+        valid_until: null,
+        day_of_week: day,
+        start_time: start,
+        end_time: end,
+        location,
+        teacher: cell('teacher') || null,
+        event_type: normalizeType(cell('type')) || null,
+      }
+
+      // Usuwanie dokładnych duplikatów (np. ten sam termin w dwóch wierszach)
+      const key = [date ?? '', day, start, end, title, location ?? ''].join('|')
+      if (!unique.has(key)) unique.set(key, event)
+    }
   }
 
-  const sortDate = (event) => event.event_date ?? event.valid_from ?? ''
+  const sortDate = (event) => event.event_date ?? ''
 
   const events = Array.from(unique.values()).sort(
     (a, b) =>
