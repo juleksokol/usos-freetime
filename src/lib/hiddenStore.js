@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { eventsForWeek, eventsOnDate } from '../dateUtils'
-import { parseIcs } from '../icsParser'
-import { parseUsosCsv } from '../usosParser'
+import { eventsForWeek, eventsOnDate } from './dateUtils'
+import { parseIcs } from './icsParser'
+import { parseUsosCsv } from './usosParser'
 
 // Prawdziwe pliki jako wzorce (katalog src/lib/__fixtures__)
 const fixture = (name) =>
