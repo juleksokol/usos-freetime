@@ -28,7 +28,7 @@
         }
         var root = document.documentElement;
         var dark =
-          s.theme === 'dark' || 
+          s.theme === 'dark' ||
           (s.theme !== 'light' &&
             window.matchMedia('(prefers-color-scheme: dark)').matches);
         if (dark) root.classList.add('dark');
@@ -36,6 +36,42 @@
         var sizes = { small: '14px', large: '18px' };
         if (sizes[s.fontScale]) root.style.fontSize = sizes[s.fontScale];
       } catch (e) {}
+    </script>
+    <script>
+      // Zabezpieczenie: jeśli aplikacja się nie uruchomiła (np. stara wersja w pamięci
+      // podręcznej wskazuje na nieistniejące pliki), po 8 s pokazujemy przycisk naprawy.
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          if (!root || root.childNodes.length > 0) return;
+
+          root.innerHTML =
+            '<div style="max-width:28rem;margin:4rem auto;padding:1.5rem;font-family:system-ui,sans-serif;text-align:center">' +
+            '<h1 style="font-size:1.25rem;margin:0 0 .5rem">Aplikacja nie mogła się uruchomić</h1>' +
+            '<p style="color:#64748b;font-size:.9rem;margin:0 0 1rem">Najczęściej to stara wersja w pamięci podręcznej przeglądarki.</p>' +
+            '<button id="ff-reset" style="background:#4f46e5;color:#fff;border:0;border-radius:.5rem;padding:.6rem 1.2rem;font-size:1rem;cursor:pointer">Wyczyść pamięć podręczną i odśwież</button>' +
+            '</div>';
+
+          document.getElementById('ff-reset').onclick = function () {
+            var tasks = [];
+            if (navigator.serviceWorker) {
+              tasks.push(
+                navigator.serviceWorker.getRegistrations().then(function (list) {
+                  return Promise.all(list.map(function (item) { return item.unregister(); }));
+                })
+              );
+            }
+            if (window.caches) {
+              tasks.push(
+                caches.keys().then(function (keys) {
+                  return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+                })
+              );
+            }
+            Promise.all(tasks).catch(function () {}).then(function () { location.reload(); });
+          };
+        }, 8000);
+      });
     </script>
   </head>
   <body>

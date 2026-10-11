@@ -31,6 +31,7 @@ import usePersistentState from '../hooks/usePersistentState'
 import useTestReminders from '../hooks/useTestReminders'
 import CustomEvents from '../components/CustomEvents'
 import ExtraSettings from '../components/ExtraSettings'
+import FreeNowWidget from '../components/FreeNowWidget'
 import GroupsPanel from '../components/GroupsPanel'
 import ImportSchedule from '../components/ImportSchedule'
 import OverlayView from '../components/OverlayView'
@@ -292,6 +293,7 @@ export default function Dashboard() {
           <div key={tab} className="stagger flex flex-col gap-6">
             {tab === 'today' && (
               <>
+                {showPanel('freeNow') && <FreeNowWidget syncTick={syncTick} />}
                 {showPanel('pushups') && <PushupCounter />}
                 {showPanel('upcomingTests') && (
                   <UpcomingTests tests={tests} onOpen={openTest} />
@@ -347,7 +349,9 @@ export default function Dashboard() {
                 {showPanel('customEvents') && (
                   <CustomEvents events={events} onChanged={loadEvents} />
                 )}
-                {showPanel('import') && <ImportSchedule onImported={loadEvents} />}
+                {showPanel('import') && (
+                  <ImportSchedule onImported={loadEvents} existing={events} />
+                )}
               </>
             )}
 

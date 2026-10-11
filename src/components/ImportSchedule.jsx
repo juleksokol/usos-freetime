@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -9,12 +9,113 @@ import {
   X,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { DAY_NAMES } from '../lib/constants'
+import { formatDate } from '../lib/dateUtils'
+import { diffImports, hasChanges } from '../lib/importDiff'
 import { parseScheduleText } from '../lib/importParser'
-import { readFileAsText } from '../lib/usosParser'
 import { replaceUserSchedule } from '../lib/scheduleService'
+import { readFileAsText } from '../lib/usosParser'
 import EventsTable from './EventsTable'
 
-export default function ImportSchedule({ onImported }) {
+const describeSlot = (event) =>
+  event.event_date ? formatDate(event.event_date) : DAY_NAMES[event.day_of_week]
+
+const describeTime = (event) =>
+  `${event.start_time.slice(0, 5)}–${event.end_time.slice(0, 5)}${
+    event.location ? ` · ${event.location}` : ''
+  }`
+
+function DiffList({ title, items, tone }) {
+  if (items.length === 0) return null
+
+  return (
+    <details className={`rounded-lg px-3 py-2 text-sm ${tone}`}>
+      <summary className="cursor-pointer font-medium">
+        {title} ({items.length})
+      </summary>
+      <ul className="mt-2 list-disc space-y-1 pl-5">
+        {items.slice(0, 12).map((item, index) => (
+          <li key={index}>{item}</li>
+        ))}
+        {items.length > 12 && <li>…i {items.length - 12} więcej</li>}
+      </ul>
+    </details>
+  )
+}
+
+// Podsumowanie różnic między zapisanym planem a nowym plikiem
+function DiffSummary({ diff }) {
+  if (!hasChanges(diff)) {
+    return (
+      <p className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+        <CheckCircle2 className="h-4 w-4 shrink-0" />
+        Brak zmian względem zapisanego planu ({diff.unchanged} zajęć).
+      </p>
+    )
+  }
+
+  const chips = [
+    ['Bez zmian', diff.unchanged, 'bg-slate-100 text-slate-700'],
+    ['Dodano', diff.added.length, 'bg-green-100 text-green-800'],
+    ['Usunięto', diff.removed.length, 'bg-red-50 text-red-700'],
+    ['Zmieniono', diff.changed.length, 'bg-amber-100 text-amber-800'],
+    ['Przesunięto', diff.moved.length, 'bg-sky-100 text-sky-800'],
+  ]
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-medium text-slate-700">
+        Zmiany względem zapisanego planu:
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {chips.map(([label, count, tone]) => (
+          <span
+            key={label}
+            className={`rounded-full px-3 py-1 text-sm font-medium ${tone}`}
+          >
+            {label}: {count}
+          </span>
+        ))}
+      </div>
+
+      <DiffList
+        title="Przesunięto"
+        tone="bg-sky-50 text-sky-900"
+        items={diff.moved.map(
+          ({ from, to }) =>
+            `${to.title}: ${describeSlot(from)} → ${describeSlot(to)} (${describeTime(to)})`
+        )}
+      />
+      <DiffList
+        title="Zmieniono godziny lub salę"
+        tone="bg-amber-50 text-amber-900"
+        items={diff.changed.map(
+          ({ before, after }) =>
+            `${after.title}, ${describeSlot(after)}: ${describeTime(before)} → ${describeTime(after)}`
+        )}
+      />
+      <DiffList
+        title="Dodano"
+        tone="bg-green-50 text-green-900"
+        items={diff.added.map(
+          (event) => `${event.title}, ${describeSlot(event)} (${describeTime(event)})`
+        )}
+      />
+      <DiffList
+        title="Usunięto"
+        tone="bg-red-50 text-red-900"
+        items={diff.removed.map(
+          (event) => `${event.title}, ${describeSlot(event)} (${describeTime(event)})`
+        )}
+      />
+    </div>
+  )
+}
+
+/**
+ * existing: aktualne zajęcia z bazy (porównujemy z nimi nowy plik przed zapisem)
+ */
+export default function ImportSchedule({ onImported, existing = [] }) {
   const { user } = useAuth()
 
   const [fileName, setFileName] = useState('')
@@ -22,6 +123,20 @@ export default function ImportSchedule({ onImported }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  // Porównujemy tylko zajęcia z importu (własne wydarzenia nie są podmieniane)
+  const existingImported = useMemo(
+    () => existing.filter((event) => event.source !== 'custom'),
+    [existing]
+  )
+
+  const diff = useMemo(
+    () =>
+      result && existingImported.length > 0
+        ? diffImports(existingImported, result.events)
+        : null,
+    [result, existingImported]
+  )
 
   const reset = () => {
     setResult(null)
@@ -77,12 +192,12 @@ export default function ImportSchedule({ onImported }) {
     <section className="rounded-2xl bg-white p-6 shadow">
       <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
         <FileSpreadsheet className="h-5 w-5 text-indigo-600" />
-        Import planu (CSV z USOS lub iCal)
+        Import planu (CSV z USOS, UniTime lub iCal)
       </h2>
       <p className="mt-1 text-sm text-slate-500">
         Wybierz plik <strong>.csv</strong> albo <strong>.ics</strong> z planem
-        zajęć. Przed zapisem zobaczysz podgląd. Zapisanie zastąpi Twój
-        zaimportowany plan; własne wydarzenia zostają.
+        zajęć. Przed zapisem zobaczysz, co się zmieniło względem zapisanego
+        planu. Własne wydarzenia zostają.
       </p>
 
       <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 px-4 py-6 text-slate-600 transition hover:border-indigo-400 hover:bg-indigo-50">
@@ -119,6 +234,8 @@ export default function ImportSchedule({ onImported }) {
             .
           </p>
 
+          {diff && <DiffSummary diff={diff} />}
+
           {result.warnings.length > 0 && (
             <details className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
               <summary className="cursor-pointer font-medium">
@@ -135,7 +252,14 @@ export default function ImportSchedule({ onImported }) {
             </details>
           )}
 
-          <EventsTable events={result.events} />
+          <details open={!diff}>
+            <summary className="cursor-pointer text-sm font-medium text-slate-700">
+              Pełny podgląd nowego planu
+            </summary>
+            <div className="mt-2">
+              <EventsTable events={result.events} />
+            </div>
+          </details>
 
           <div className="flex flex-wrap gap-3">
             <button

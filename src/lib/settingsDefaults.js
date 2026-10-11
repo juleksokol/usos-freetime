@@ -49,6 +49,7 @@ export const TAB_OPTIONS = [
 ]
 
 export const PANEL_OPTIONS = [
+  { id: 'freeNow', label: 'Kto jest wolny teraz', hint: 'Zakładka „Dziś”, u góry' },
   { id: 'pushups', label: 'Licznik pompek', hint: 'Zakładka „Dziś”' },
   {
     id: 'upcomingTests',

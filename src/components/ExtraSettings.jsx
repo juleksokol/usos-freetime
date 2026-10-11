@@ -1,11 +1,16 @@
 import { useState } from 'react'
-import { Bell, Sparkles } from 'lucide-react'
+import { Bell, Download, Sparkles } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
+import { todayISO } from '../lib/dateUtils'
+import { buildIcs, buildJsonExport, downloadFile } from '../lib/exportData'
 import {
   notificationPermission,
   requestNotificationPermission,
   showLocalNotification,
 } from '../lib/notifications'
+import { fetchUserSchedule } from '../lib/scheduleService'
+import { fetchTests } from '../lib/testService'
 import { Row, Section, Switch, selectClass } from './SettingsControls'
 
 const REMINDER_HOURS = [12, 14, 16, 17, 18, 19, 20, 21, 22]
@@ -18,9 +23,12 @@ const PERMISSION_LABELS = {
 }
 
 export default function ExtraSettings() {
+  const { user, profile } = useAuth()
   const { settings, updateSettings } = useSettings()
   const [permission, setPermission] = useState(notificationPermission)
   const [info, setInfo] = useState('')
+  const [exporting, setExporting] = useState('')
+  const [exportInfo, setExportInfo] = useState('')
 
   const set = (key) => (value) => updateSettings({ [key]: value })
 
@@ -38,6 +46,48 @@ export default function ExtraSettings() {
         : 'Nie udało się wysłać powiadomienia. Sprawdź uprawnienia przeglądarki.'
     )
   }
+
+  // Pobiera aktualne dane z bazy i zapisuje je do pliku
+  const exportData = async (kind) => {
+    if (!user) return
+
+    setExporting(kind)
+    setExportInfo('')
+
+    try {
+      const [events, tests] = await Promise.all([
+        fetchUserSchedule(user.id),
+        fetchTests(user.id),
+      ])
+      const stamp = todayISO()
+
+      if (kind === 'json') {
+        const data = buildJsonExport({
+          email: user.email,
+          profile,
+          events,
+          tests,
+          settings,
+        })
+        downloadFile(
+          `usos-freetime-${stamp}.json`,
+          JSON.stringify(data, null, 2),
+          'application/json'
+        )
+      } else {
+        downloadFile(`usos-freetime-${stamp}.ics`, buildIcs(events, tests), 'text/calendar')
+      }
+
+      setExportInfo('Plik został pobrany.')
+    } catch (err) {
+      setExportInfo(`Nie udało się wyeksportować danych: ${err.message}`)
+    } finally {
+      setExporting('')
+    }
+  }
+
+  const buttonClass =
+    'rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100 disabled:opacity-60'
 
   return (
     <>
@@ -124,10 +174,7 @@ export default function ExtraSettings() {
               </button>
             )}
             {permission === 'granted' && (
-              <button
-                onClick={sendTest}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100"
-              >
+              <button onClick={sendTest} className={buttonClass}>
                 Wyślij test
               </button>
             )}
@@ -135,6 +182,49 @@ export default function ExtraSettings() {
         </Row>
 
         {info && <p className="py-3 text-sm text-slate-600">{info}</p>}
+      </Section>
+
+      <Section
+        icon={Download}
+        title="Eksport danych i prywatność"
+        description="Kopia Twoich danych oraz informacje o ich przetwarzaniu."
+      >
+        <Row
+          label="Wszystkie dane (JSON)"
+          hint="Konto, plan, własne wydarzenia, sprawdziany i ustawienia."
+        >
+          <button
+            onClick={() => exportData('json')}
+            disabled={exporting !== ''}
+            className={buttonClass}
+          >
+            {exporting === 'json' ? 'Pobieranie…' : 'Pobierz JSON'}
+          </button>
+        </Row>
+
+        <Row
+          label="Kalendarz (.ics)"
+          hint="Zajęcia, własne wydarzenia i sprawdziany do wczytania w Google Calendar, Outlooku lub kalendarzu iPhone'a. Sprawdziany mają alarm dzień przed."
+        >
+          <button
+            onClick={() => exportData('ics')}
+            disabled={exporting !== ''}
+            className={buttonClass}
+          >
+            {exporting === 'ics' ? 'Pobieranie…' : 'Pobierz .ics'}
+          </button>
+        </Row>
+
+        <Row label="Polityka prywatności">
+          <a
+            href="#/prywatnosc"
+            className="text-sm text-indigo-600 underline-offset-2 hover:underline"
+          >
+            Otwórz
+          </a>
+        </Row>
+
+        {exportInfo && <p className="py-3 text-sm text-slate-600">{exportInfo}</p>}
       </Section>
     </>
   )
