@@ -25,8 +25,7 @@ export default function PrivacyPage() {
 
       <h2 className={h2}>Kto odpowiada za dane</h2>
       <p className={p}>
-        USOS FreeTime to prywatny projekt prowadzony przez [imię i nazwisko lub
-        pseudonim]. Kontakt w sprawach danych: [adres e-mail].
+        USOS FreeTime to prywatny projekt prowadzony przez [Julian Sokół]. Kontakt w sprawach danych: [julek.sokol37@gmail.com].
       </p>
 
       <h2 className={h2}>Jakie dane przetwarzamy</h2>

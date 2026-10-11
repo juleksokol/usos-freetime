@@ -1,3 +1,4 @@
+/* global __BUILD_TIME__ */
 import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from './context/AuthContext'
@@ -39,6 +40,8 @@ export default function App() {
         <a href={PRIVACY_HASH} className="underline-offset-2 hover:underline">
           Polityka prywatności
         </a>
+        <span className="mx-2">·</span>
+        Wersja z {new Date(__BUILD_TIME__).toLocaleString('pl-PL')}
       </footer>
     </>
   )
