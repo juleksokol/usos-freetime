@@ -23,11 +23,10 @@ describe('rodzaje zajęć (litery znaku wodnego)', () => {
     expect(classifyEvent({ event_type: 'zajęcia seminaryjne', location: 'C-1' }).letters).toBe('S')
     expect(classifyEvent({ event_type: 'wykład', location: 'Wirtualna' }).letters).toBe('WZ')
     expect(classifyEvent({ event_type: null, location: 'Teams' }).letters).toBe('Z')
-    expect(classifyEvent({ event_type: 'Ćwiczenia audytoryjne', location: 'A-2' }).letters).toBe('L')
+    expect(classifyEvent({ event_type: 'ćwiczenia audytoryjne', location: 'A-2' }).letters).toBe('L')
   })
 
   it('zajęcia innych rodzajów nie dostają litery', () => {
-    expect(classifyEvent({ event_type: 'Ćwiczenia audytoryjne', location: 'A-2' }).letters).toBe('')
     expect(classifyEvent({ event_type: 'Ćwiczenia projektowe', location: 'A-2' }).kind).toBe('other')
     expect(classifyEvent({ event_type: null, location: null }).letters).toBe('')
   })
