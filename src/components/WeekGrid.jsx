@@ -9,25 +9,33 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { useTests } from '../context/TestsContext'
-import { addDays, formatDayMonth } from '../lib/dateUtils'
+import { addDays, daysBetween, formatDayMonth, todayISO } from '../lib/dateUtils'
 import { layoutColumns } from '../lib/layout'
 import { weekMarkers } from '../lib/tests'
 import { minutesToTime, timeToMinutes } from '../lib/timeUtils'
 import EventDetailModal from './EventDetailModal'
 
 const LONG_PRESS_MS = 550
+const TOUCH_DRAG_DELAY_MS = 450
+const SNAP_MIN = 15
 
 // Zajęcia z planu (nie własne wydarzenia i nie sprawdziany)
 const isClass = (event) => event.source !== 'custom' && event.source !== 'test'
 
+function currentMinutes() {
+  const now = new Date()
+  return now.getHours() * 60 + now.getMinutes()
+}
+
 /**
- * layers:      [{ id, name, color, watermark?, showMarkers?, events: [...] }]
- * highlights:  [{ day, startMin, endMin }]  (opcjonalnie, np. wspólne okienka)
- * weekStart:   "RRRR-MM-DD" poniedziałku (daty w nagłówku, kropki sprawdzianów)
- * mode:        'view' (domyślnie) albo 'picker' (kafelki z plusem do wyboru zajęć)
- * onPick:      ({ event, date }) w trybie 'picker'
- * onLongPress: ({ event, date }) po przytrzymaniu kafelka zajęć
- * onEditTest:  (testId) przycisk "Edytuj" w oknie sprawdzianu
+ * layers:        [{ id, name, color, watermark?, showMarkers?, applySubjectStyles?, events: [...] }]
+ * highlights:    [{ day, startMin, endMin }]  (opcjonalnie, np. wspólne okienka)
+ * weekStart:     "RRRR-MM-DD" poniedziałku (daty w nagłówku, kropki sprawdzianów, linia "teraz")
+ * mode:          'view' (domyślnie) albo 'picker' (kafelki z plusem do wyboru zajęć)
+ * onPick:        ({ event, date }) w trybie 'picker'
+ * onLongPress:   ({ event, date }) po przytrzymaniu kafelka zajęć
+ * onEditTest:    (testId) przycisk "Edytuj" w oknie sprawdzianu
+ * onCreateRange: ({ date, startMin, endMin }) po przeciągnięciu po pustym miejscu siatki
  *
  * Zdarzenia mogą mieć pole tileColor (własny kolor kafelka, np. sprawdziany).
  */
@@ -39,14 +47,31 @@ export default function WeekGrid({
   onPick,
   onLongPress,
   onEditTest,
+  onCreateRange,
 }) {
   const { user } = useAuth()
   const { settings } = useSettings()
   const { tests } = useTests()
   const [selected, setSelected] = useState(null)
-  const pressRef = useRef({ timer: null, fired: false, x: 0, y: 0 })
+  const [draft, setDraft] = useState(null) // zaznaczenie przy przeciąganiu: { day, startMin, endMin }
+  const [nowMin, setNowMin] = useState(currentMinutes)
 
-  useEffect(() => () => clearTimeout(pressRef.current.timer), [])
+  const pressRef = useRef({ timer: null, fired: false, x: 0, y: 0 })
+  const dragRef = useRef({
+    timer: null,
+    active: false,
+    moved: false,
+    day: null,
+    column: null,
+    pointerId: null,
+    pointerType: 'mouse',
+    x: 0,
+    y: 0,
+    anchor: 0,
+    range: null,
+  })
+  const nowLineRef = useRef(null)
+  const scrolledRef = useRef(false)
 
   const picker = mode === 'picker'
   const startHour = settings.gridStartHour
@@ -54,6 +79,7 @@ export default function WeekGrid({
   const hourHeight =
     DENSITY_HOUR_HEIGHT[settings.density] ?? DENSITY_HOUR_HEIGHT.normal
   const days = settings.showWeekend ? ALL_DAYS : WORKDAYS
+  const canCreate = !picker && Boolean(onCreateRange) && Boolean(weekStart)
 
   const startMin = startHour * 60
   const endMin = endHour * 60
@@ -68,6 +94,46 @@ export default function WeekGrid({
   }
   const laneCount = Math.max(layers.length, 1)
   const laneWidth = 100 / laneCount
+
+  // Linia "teraz": tylko gdy wyświetlany tydzień zawiera dzisiejszy dzień
+  const todayColumn = weekStart ? daysBetween(weekStart, todayISO()) + 1 : null
+  const showNow =
+    !picker &&
+    settings.showNowLine &&
+    todayColumn !== null &&
+    days.includes(todayColumn) &&
+    nowMin >= startMin &&
+    nowMin <= endMin
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMin(currentMinutes()), 30000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Jednorazowe przewinięcie do bieżącej godziny po pokazaniu siatki
+  useEffect(() => {
+    if (!settings.autoScrollNow || scrolledRef.current || !nowLineRef.current) return
+
+    scrolledRef.current = true
+    nowLineRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [settings.autoScrollNow, showNow])
+
+  // Po aktywowaniu przeciągania na telefonie blokujemy przewijanie strony
+  useEffect(() => {
+    const preventScroll = (e) => {
+      if (dragRef.current.active) e.preventDefault()
+    }
+    document.addEventListener('touchmove', preventScroll, { passive: false })
+
+    const drag = dragRef.current
+    const press = pressRef.current
+    return () => {
+      document.removeEventListener('touchmove', preventScroll)
+      clearTimeout(press.timer)
+      clearTimeout(drag.timer)
+      delete document.body.dataset.dragging
+    }
+  }, [])
 
   const labelOffsetClass = (hour) => {
     if (hour === startHour) return ''
@@ -112,10 +178,21 @@ export default function WeekGrid({
       if (isCustom) hasCustom = true
       if (isTest) hasTests = true
 
+      // Własny kolor i skrót przedmiotu (kolor tylko na własnym planie)
+      const subjectStyle = isClass(event) ? settings.subjectStyles?.[event.title] : null
+      const label =
+        settings.useAbbreviations && subjectStyle?.abbr
+          ? subjectStyle.abbr
+          : event.title
+      const color =
+        event.tileColor ??
+        ((layer.applySubjectStyles && subjectStyle?.color) || layer.color)
+
       const item = {
         key: `${layer.id}-${event.id ?? `${event.day_of_week}-${rawStart}-${event.title}`}`,
         event,
-        color: event.tileColor ?? layer.color,
+        label,
+        color,
         ownerName: layer.name,
         watermark: settings.showWatermark ? (layer.watermark ?? null) : null,
         laneIndex,
@@ -150,7 +227,7 @@ export default function WeekGrid({
     })
   }
 
-  // Przytrzymanie kafelka zajęć
+  // ----- Przytrzymanie kafelka zajęć -----
   const canLongPress = (block) =>
     !picker && Boolean(onLongPress) && isClass(block.event)
 
@@ -194,6 +271,115 @@ export default function WeekGrid({
     openDetail(block)
   }
 
+  // ----- Przeciąganie po pustym miejscu: tworzenie wydarzenia -----
+  const minutesAt = (clientY, column) => {
+    const rect = column.getBoundingClientRect()
+    const raw = startMin + ((clientY - rect.top) / hourHeight) * 60
+    const snapped = Math.round(raw / SNAP_MIN) * SNAP_MIN
+    return Math.min(endMin, Math.max(startMin, snapped))
+  }
+
+  const finishDrag = () => {
+    const drag = dragRef.current
+    clearTimeout(drag.timer)
+    drag.timer = null
+    drag.active = false
+    delete document.body.dataset.dragging
+    try {
+      drag.column?.releasePointerCapture?.(drag.pointerId)
+    } catch {
+      // wskaźnik mógł już zostać zwolniony
+    }
+    setDraft(null)
+  }
+
+  const beginDrag = (e, day) => {
+    if (!canCreate || e.target.closest('button')) return
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+
+    const drag = dragRef.current
+    const column = e.currentTarget
+
+    drag.day = day
+    drag.column = column
+    drag.pointerId = e.pointerId
+    drag.pointerType = e.pointerType
+    drag.x = e.clientX
+    drag.y = e.clientY
+    drag.moved = false
+    drag.anchor = minutesAt(e.clientY, column)
+
+    const activate = () => {
+      drag.active = true
+      document.body.dataset.dragging = '1'
+      column.setPointerCapture?.(drag.pointerId)
+
+      // Dotyk: samo przytrzymanie daje godzinę od tego momentu; mysz: zaznaczenie rośnie z ruchem
+      const initialEnd =
+        drag.pointerType === 'mouse'
+          ? Math.min(endMin, drag.anchor + SNAP_MIN)
+          : Math.min(endMin, drag.anchor + 60)
+      drag.range = { startMin: drag.anchor, endMin: initialEnd }
+      if (drag.pointerType !== 'mouse') navigator.vibrate?.(15)
+      setDraft({ day, ...drag.range })
+    }
+
+    clearTimeout(drag.timer)
+    if (e.pointerType === 'mouse') {
+      activate()
+    } else {
+      drag.timer = setTimeout(activate, TOUCH_DRAG_DELAY_MS)
+    }
+  }
+
+  const moveDrag = (e) => {
+    const drag = dragRef.current
+
+    if (!drag.active) {
+      // Ruch przed aktywacją na dotyku oznacza zwykłe przewijanie strony
+      if (drag.timer && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 10) {
+        clearTimeout(drag.timer)
+        drag.timer = null
+      }
+      return
+    }
+
+    if (Math.abs(e.clientY - drag.y) > 6) drag.moved = true
+    if (!drag.moved) return
+
+    const current = minutesAt(e.clientY, drag.column)
+    const from = Math.min(drag.anchor, current)
+    let to = Math.max(drag.anchor, current)
+    if (to === from) to = Math.min(endMin, from + SNAP_MIN)
+
+    drag.range = { startMin: from, endMin: to }
+    setDraft({ day: drag.day, ...drag.range })
+  }
+
+  const endDrag = () => {
+    const drag = dragRef.current
+    if (!drag.active) {
+      clearTimeout(drag.timer)
+      drag.timer = null
+      return
+    }
+
+    const range = drag.range
+    const shouldCreate =
+      range && range.endMin > range.startMin && (drag.moved || drag.pointerType !== 'mouse')
+    const day = drag.day
+
+    finishDrag()
+
+    if (shouldCreate) {
+      onCreateRange({
+        date: addDays(weekStart, day - 1),
+        startMin: range.startMin,
+        endMin: range.endMin,
+      })
+    }
+  }
+
   let blockIndex = 0
 
   return (
@@ -223,21 +409,33 @@ export default function WeekGrid({
             style={gridColumns}
           >
             <div />
-            {days.map((day) => (
-              <div
-                key={day}
-                className="border-l border-slate-200 py-2 text-center"
-              >
-                <div className="text-sm font-semibold text-slate-600">
-                  {DAY_NAMES[day]}
-                </div>
-                {weekStart && (
-                  <div className="text-xs text-slate-400">
-                    {formatDayMonth(addDays(weekStart, day - 1))}
+            {days.map((day) => {
+              const isToday = day === todayColumn
+
+              return (
+                <div
+                  key={day}
+                  className="border-l border-slate-200 py-2 text-center"
+                >
+                  <div
+                    className={`text-sm ${
+                      isToday
+                        ? 'font-bold text-indigo-600'
+                        : 'font-semibold text-slate-600'
+                    }`}
+                  >
+                    {DAY_NAMES[day]}
                   </div>
-                )}
-              </div>
-            ))}
+                  {weekStart && (
+                    <div
+                      className={`text-xs ${isToday ? 'text-indigo-600' : 'text-slate-400'}`}
+                    >
+                      {formatDayMonth(addDays(weekStart, day - 1))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {/* Siatka */}
@@ -259,14 +457,20 @@ export default function WeekGrid({
             {days.map((day) => (
               <div
                 key={day}
-                className="relative border-l border-slate-200"
+                className={`relative border-l border-slate-200 ${
+                  canCreate ? 'select-none' : ''
+                }`}
                 style={{ height: totalHeight }}
+                onPointerDown={canCreate ? (e) => beginDrag(e, day) : undefined}
+                onPointerMove={canCreate ? moveDrag : undefined}
+                onPointerUp={canCreate ? endDrag : undefined}
+                onPointerCancel={canCreate ? finishDrag : undefined}
               >
                 {/* Linie godzin */}
                 {hours.map((hour) => (
                   <div
                     key={hour}
-                    className="absolute inset-x-0 border-t border-slate-100"
+                    className="pointer-events-none absolute inset-x-0 border-t border-slate-100"
                     style={{ top: (hour - startHour) * hourHeight }}
                   />
                 ))}
@@ -376,7 +580,7 @@ export default function WeekGrid({
                         .join('\n')}
                     >
                       <span className="block truncate pr-3 font-semibold">
-                        {event.title}
+                        {block.label}
                       </span>
                       {showTime && (
                         <span className="block truncate text-slate-600">
@@ -414,6 +618,33 @@ export default function WeekGrid({
                     </button>
                   )
                 })}
+
+                {/* Zaznaczenie podczas przeciągania (nowe wydarzenie) */}
+                {draft && draft.day === day && (
+                  <div
+                    className="pointer-events-none absolute inset-x-1 z-30 rounded-md border-2 border-dashed border-indigo-500 bg-indigo-500/15"
+                    style={{
+                      top: toPx(draft.startMin),
+                      height: toPx(draft.endMin) - toPx(draft.startMin),
+                    }}
+                  >
+                    <span className="block px-1 text-[10px] font-semibold text-indigo-600">
+                      {minutesToTime(draft.startMin)}–{minutesToTime(draft.endMin)}
+                    </span>
+                  </div>
+                )}
+
+                {/* Linia "teraz" */}
+                {showNow && day === todayColumn && (
+                  <div
+                    ref={nowLineRef}
+                    className="pointer-events-none absolute inset-x-0 z-20"
+                    style={{ top: toPx(nowMin) }}
+                  >
+                    <div className="h-0.5 bg-red-500" />
+                    <span className="absolute -left-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500" />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -431,6 +662,13 @@ export default function WeekGrid({
         <p className="text-xs text-slate-500">
           Przytrzymaj kafelek zajęć, aby dodać do nich kolokwium lub egzamin.
           Kliknięcie pokazuje szczegóły.
+        </p>
+      )}
+
+      {canCreate && (
+        <p className="text-xs text-slate-500">
+          Aby dodać własne wydarzenie, przeciągnij po pustym miejscu (na
+          telefonie: przytrzymaj puste miejsce i przeciągnij).
         </p>
       )}
 

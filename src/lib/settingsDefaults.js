@@ -16,6 +16,11 @@ export const DEFAULT_SETTINGS = {
   tileShowTime: true,
   tileShowLocation: true,
   highlightCustom: true,
+  showNowLine: true,
+  autoScrollNow: true,
+  swipeNav: true,
+  useAbbreviations: true,
+  subjectStyles: {}, // { [nazwa przedmiotu]: { color?, abbr? } }
 
   // Kolokwia i powiadomienia
   showTestsOnPlan: true,

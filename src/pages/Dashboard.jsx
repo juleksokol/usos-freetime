@@ -14,6 +14,7 @@ import {
   Layers,
   Loader2,
   LogOut,
+  Search,
   Settings as SettingsIcon,
   Users,
 } from 'lucide-react'
@@ -21,13 +22,15 @@ import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { TestsContext } from '../context/TestsContext'
 import { getPalette } from '../lib/constants'
-import { defaultWeekStart, eventsForWeek } from '../lib/dateUtils'
+import { defaultWeekStart, eventsForWeek, mondayOf } from '../lib/dateUtils'
 import { loadCache, saveCache } from '../lib/offlineCache'
 import { fetchUserSchedule } from '../lib/scheduleService'
 import { fetchTests } from '../lib/testService'
 import { draftFromTile, testToDraft, testToEvent } from '../lib/tests'
+import { minutesToTime } from '../lib/timeUtils'
 import useRealtimeSync from '../hooks/useRealtimeSync'
 import usePersistentState from '../hooks/usePersistentState'
+import useSwipeNavigation from '../hooks/useSwipeNavigation'
 import useTestReminders from '../hooks/useTestReminders'
 import CustomEvents from '../components/CustomEvents'
 import ExtraSettings from '../components/ExtraSettings'
@@ -35,7 +38,10 @@ import FreeNowWidget from '../components/FreeNowWidget'
 import GroupsPanel from '../components/GroupsPanel'
 import ImportSchedule from '../components/ImportSchedule'
 import OverlayView from '../components/OverlayView'
+import PlanSettings from '../components/PlanSettings'
 import PushupCounter from '../components/PushupCounter'
+import QuickEventDialog from '../components/QuickEventDialog'
+import SearchModal from '../components/SearchModal'
 import SettingsPanel from '../components/SettingsPanel'
 import TestDialog from '../components/TestDialog'
 import TestsTab from '../components/TestsTab'
@@ -86,12 +92,18 @@ export default function Dashboard() {
   const [offlineNote, setOfflineNote] = useState('')
   const [syncTick, setSyncTick] = useState(0) // zmiana = widoki grup pobierają dane ponownie
 
-  // Okno dodawania/edycji sprawdzianu i widok zakładki "Kolokwia" (lista albo wybór zajęć)
+  // Okna: dodawanie/edycja sprawdzianu, szybkie wydarzenie z siatki, wyszukiwarka
   const [dialog, setDialog] = useState(null)
+  const [quickDraft, setQuickDraft] = useState(null)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [testsView, setTestsView] = useState('list')
 
   const name = profile?.display_name ?? user?.email
   const userId = user?.id
+
+  // Przesuwanie palcem między tygodniami i dniami
+  const mainRef = useRef(null)
+  useSwipeNavigation(mainRef, settings.swipeNav)
 
   const loadEvents = useCallback(async () => {
     if (!userId) return
@@ -150,6 +162,18 @@ export default function Dashboard() {
     hour: settings.reminderHour,
   })
 
+  // Skrót Ctrl+K (Cmd+K) otwiera wyszukiwarkę
+  useEffect(() => {
+    const handleKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [])
+
   // Animacje: wyłączenie oraz płynna zmiana motywu
   useEffect(() => {
     document.documentElement.classList.toggle('no-anim', !settings.animations)
@@ -194,7 +218,7 @@ export default function Dashboard() {
   const testEvents = useMemo(() => tests.map(testToEvent), [tests])
   const testsValue = useMemo(() => ({ tests }), [tests])
 
-  // Lista przedmiotów do wyboru w oknie dodawania sprawdzianu
+  // Lista przedmiotów (okno sprawdzianu i ustawienia kolorów)
   const subjects = useMemo(() => {
     const names = new Set(
       events.filter((event) => event.source !== 'custom').map((event) => event.title)
@@ -216,12 +240,25 @@ export default function Dashboard() {
     setTestsView('list')
   }
 
+  const handleQuickSaved = async () => {
+    await loadEvents()
+    setQuickDraft(null)
+  }
+
+  // Z wyszukiwarki: otwiera "Mój plan" w tygodniu z podaną datą
+  const goToDate = (date) => {
+    setWeekStart(mondayOf(date))
+    selectTab('plan')
+    setSearchOpen(false)
+  }
+
   const weekEvents = eventsForWeek(events, weekStart)
   const myLayers = [
     {
       id: userId,
       name: name ?? 'Ja',
       color: getPalette(settings.personPalette)[0],
+      applySubjectStyles: true, // własne kolory przedmiotów tylko na własnym planie
       // gdy sprawdziany są kafelkami, kropek nie pokazujemy
       showMarkers: !settings.showTestsOnPlan,
       events: [
@@ -247,6 +284,14 @@ export default function Dashboard() {
               <span className="hidden text-sm text-slate-600 sm:inline">
                 {name}
               </span>
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="rounded-lg border border-slate-300 p-2 text-slate-700 transition hover:bg-slate-100"
+                aria-label="Szukaj"
+                title="Szukaj (Ctrl+K)"
+              >
+                <Search className="h-4 w-4" />
+              </button>
               <ThemeToggle />
               <button
                 onClick={signOut}
@@ -283,7 +328,7 @@ export default function Dashboard() {
           </nav>
         </header>
 
-        <main className="mx-auto max-w-5xl p-4 sm:p-6">
+        <main ref={mainRef} className="mx-auto max-w-5xl p-4 sm:p-6">
           {offlineNote && (
             <p className="mb-6 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
               {offlineNote}
@@ -340,6 +385,13 @@ export default function Dashboard() {
                             openDialog(draftFromTile(event, date))
                           }
                           onEditTest={openTestById}
+                          onCreateRange={({ date, startMin, endMin }) =>
+                            setQuickDraft({
+                              date,
+                              start: minutesToTime(startMin),
+                              end: minutesToTime(endMin),
+                            })
+                          }
                         />
                       </div>
                     )}
@@ -372,6 +424,7 @@ export default function Dashboard() {
             {tab === 'settings' && (
               <>
                 <ExtraSettings />
+                <PlanSettings subjects={subjects} />
                 <SettingsPanel onDataChanged={loadEvents} />
               </>
             )}
@@ -384,6 +437,28 @@ export default function Dashboard() {
             subjects={subjects}
             onClose={() => setDialog(null)}
             onSaved={handleSaved}
+          />
+        )}
+
+        {quickDraft && (
+          <QuickEventDialog
+            initial={quickDraft}
+            events={events}
+            onClose={() => setQuickDraft(null)}
+            onSaved={handleQuickSaved}
+          />
+        )}
+
+        {searchOpen && (
+          <SearchModal
+            events={events}
+            tests={tests}
+            onClose={() => setSearchOpen(false)}
+            onGoToDate={goToDate}
+            onOpenTest={(test) => {
+              setSearchOpen(false)
+              openTest(test)
+            }}
           />
         )}
       </div>
