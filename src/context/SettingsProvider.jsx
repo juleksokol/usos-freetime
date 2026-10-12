@@ -49,10 +49,17 @@ export default function SettingsProvider({ children }) {
     () => window.matchMedia('(prefers-color-scheme: dark)').matches
   )
 
-  const settings = useMemo(
-    () => ({ ...DEFAULT_SETTINGS, ...overrides }),
-    [overrides]
-  )
+  const settings = useMemo(() => {
+    const merged = { ...DEFAULT_SETTINGS, ...overrides }
+
+    // Stary blok "Status Teraz" został zastąpiony kartą "Kto jest wolny teraz":
+    // trzymamy go ukrytego zawsze, także w już zapisanych ustawieniach
+    if (!merged.hiddenPanels.includes('now')) {
+      merged.hiddenPanels = [...merged.hiddenPanels, 'now']
+    }
+
+    return merged
+  }, [overrides])
 
   // Po zalogowaniu pobieramy ustawienia zapisane na koncie (mają pierwszeństwo)
   useEffect(() => {

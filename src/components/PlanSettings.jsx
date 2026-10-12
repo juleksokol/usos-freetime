@@ -61,16 +61,45 @@ export default function PlanSettings({ subjects }) {
     <>
       <Section
         icon={SlidersHorizontal}
-        title="Plan: linia „teraz”, gesty i skróty"
+        title="Plan: kafelki, linia „teraz” i gesty"
         description="Dodatkowe ustawienia siatki planu."
       >
+        <Row
+          label="Litera typu zajęć na kafelku"
+          hint="Bardzo blady znak wodny: W wykład, L laboratorium, S seminarium, Z zajęcia zdalne. Laboratoria mają też ciemniejszy odcień."
+        >
+          <Switch
+            checked={settings.showTypeWatermark}
+            onChange={set('showTypeWatermark')}
+            label="Litera typu zajęć"
+          />
+        </Row>
+
+        <Row
+          label="Prowadzący na kafelkach"
+          hint="Widoczny na Twoim planie, gdy kafelek jest dość wysoki."
+        >
+          <Switch
+            checked={settings.tileShowTeacher}
+            onChange={set('tileShowTeacher')}
+            label="Prowadzący na kafelkach"
+          />
+        </Row>
+
+        <Row
+          label="Skróty przedmiotów"
+          hint="Skrót pojawia się tylko wtedy, gdy pełna nazwa nie mieści się na kafelku w dwóch liniach."
+        >
+          <Switch checked={settings.useAbbreviations} onChange={set('useAbbreviations')} label="Skróty" />
+        </Row>
+
         <Row label="Linia „teraz” na siatce" hint="Czerwona linia w dzisiejszej kolumnie.">
           <Switch checked={settings.showNowLine} onChange={set('showNowLine')} label="Linia teraz" />
         </Row>
 
         <Row
-          label="Przewijaj do bieżącej godziny"
-          hint="Po wejściu na plan strona przewija się do linii „teraz”."
+          label="Przewijaj do bieżącego dnia i godziny"
+          hint="Po wejściu na plan siatka ustawia się na linii „teraz”, a na telefonie także na dzisiejszym dniu."
         >
           <Switch checked={settings.autoScrollNow} onChange={set('autoScrollNow')} label="Autoprzewijanie" />
         </Row>
@@ -81,19 +110,12 @@ export default function PlanSettings({ subjects }) {
         >
           <Switch checked={settings.swipeNav} onChange={set('swipeNav')} label="Gesty" />
         </Row>
-
-        <Row
-          label="Skróty przedmiotów na kafelkach"
-          hint="Zamiast pełnej nazwy kafelek pokazuje ustawiony niżej skrót."
-        >
-          <Switch checked={settings.useAbbreviations} onChange={set('useAbbreviations')} label="Skróty" />
-        </Row>
       </Section>
 
       <Section
         icon={Palette}
         title="Kolory i skróty przedmiotów"
-        description="Kolor działa na Twoim planie (na wspólnym planie kolory oznaczają osoby), a skrót widać wszędzie."
+        description="Kolor działa na Twoim planie (na wspólnym planie kolory oznaczają osoby), a skrót widać wszędzie, gdzie nazwa się nie mieści."
       >
         {subjects.length === 0 ? (
           <p className="py-3 text-sm text-slate-500">

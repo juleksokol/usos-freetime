@@ -9,6 +9,7 @@ import {
   UserPlus,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { getRememberPreference } from '../lib/session'
 
 function translateError(message) {
   if (!message) return 'Wystąpił nieznany błąd.'
@@ -40,6 +41,7 @@ export default function AuthForm() {
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(getRememberPreference)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
@@ -69,7 +71,8 @@ export default function AuthForm() {
         const { data, error: signUpError } = await signUp(
           email.trim(),
           password,
-          name
+          name,
+          remember
         )
         if (signUpError) {
           setError(translateError(signUpError.message))
@@ -85,7 +88,7 @@ export default function AuthForm() {
           setPassword('')
         }
       } else {
-        const { error: signInError } = await signIn(email.trim(), password)
+        const { error: signInError } = await signIn(email.trim(), password, remember)
         if (signInError) {
           setError(translateError(signInError.message))
         }
@@ -151,6 +154,22 @@ export default function AuthForm() {
               required
             />
           </div>
+
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-indigo-600"
+            />
+            <span>
+              Zapamiętaj mnie
+              <span className="block text-xs text-slate-400">
+                Odznacz na cudzym urządzeniu: wylogujemy Cię po zamknięciu
+                przeglądarki.
+              </span>
+            </span>
+          </label>
 
           {error && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">

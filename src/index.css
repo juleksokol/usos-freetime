@@ -41,6 +41,17 @@ button:not(:disabled):active {
   transform: scale(0.97);
 }
 
+/* Zabezpieczenie przed wychodzeniem treści poza bloki na małych ekranach */
+main section,
+main article {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+main :where(button, select, input, textarea) {
+  max-width: 100%;
+}
+
 /* ===== Kolor akcentu: paleta "indigo" w całej aplikacji jest podmieniana na wybrany akcent ===== */
 :root {
   --accent-50: #eef2ff;
@@ -193,6 +204,89 @@ button:not(:disabled):active {
 
 .dark .tab-indicator {
   background: var(--accent-400);
+}
+
+/* ===== Ukryte paski przewijania (przewijanie nadal działa) ===== */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ===== Neonowa poświata u góry i u dołu planu =====
+   data-more="true": jest coś do przewinięcia (blada poświata),
+   .neon-active: właśnie przewijasz w tę stronę (jasny błysk) */
+.neon-edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 56px;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.neon-top {
+  top: 0;
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--accent-500) 38%, transparent),
+    transparent
+  );
+}
+
+.neon-bottom {
+  bottom: 0;
+  border-radius: 0 0 12px 12px;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--accent-500) 38%, transparent),
+    transparent
+  );
+}
+
+.neon-edge::before {
+  content: '';
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent-400);
+  box-shadow:
+    0 0 10px 2px var(--accent-400),
+    0 0 26px 6px color-mix(in srgb, var(--accent-500) 60%, transparent);
+}
+
+.neon-top::before {
+  top: 0;
+}
+
+.neon-bottom::before {
+  bottom: 0;
+}
+
+.neon-edge[data-more='true'] {
+  opacity: 0.35;
+}
+
+.neon-edge.neon-active {
+  opacity: 1;
+  animation: neon-pulse 0.65s ease-out;
+}
+
+@keyframes neon-pulse {
+  0% {
+    filter: brightness(2.2);
+  }
+  100% {
+    filter: brightness(1);
+  }
 }
 
 /* ===== Animacje ===== */

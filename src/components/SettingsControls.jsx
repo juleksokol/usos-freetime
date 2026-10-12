@@ -1,11 +1,11 @@
 export const selectClass =
-  'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+  'max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
 
 export function Section({ icon: Icon, title, description, children }) {
   return (
     <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
       <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-        {Icon && <Icon className="h-5 w-5 text-indigo-600" />}
+        {Icon && <Icon className="h-5 w-5 shrink-0 text-indigo-600" />}
         {title}
       </h2>
       {description && (
@@ -20,12 +20,12 @@ export function Section({ icon: Icon, title, description, children }) {
 
 export function Row({ label, hint, children }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 py-3">
-      <div className="min-w-0 flex-1">
+    <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+      <div className="min-w-0 sm:flex-1">
         <p className="text-sm font-medium text-slate-800">{label}</p>
         {hint && <p className="mt-0.5 text-sm text-slate-500">{hint}</p>}
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className="min-w-0 max-w-full sm:shrink-0">{children}</div>
     </div>
   )
 }
@@ -54,16 +54,16 @@ export function Switch({ checked, onChange, disabled = false, label }) {
 
 export function Segmented({ value, options, onChange }) {
   return (
-    <div className="inline-flex overflow-hidden rounded-lg border border-slate-300">
+    <div className="flex max-w-full flex-wrap gap-1.5">
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           onClick={() => onChange(option.value)}
-          className={`px-3 py-1.5 text-sm transition ${
+          className={`rounded-lg border px-3 py-1.5 text-sm transition ${
             value === option.value
-              ? 'bg-indigo-600 text-white'
-              : 'bg-white text-slate-700 hover:bg-slate-100'
+              ? 'border-indigo-600 bg-indigo-600 text-white'
+              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
           }`}
         >
           {option.label}

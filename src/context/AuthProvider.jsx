@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { clearAllCaches } from '../lib/offlineCache'
+import { clearOtherStorageTokens, setRememberPreference } from '../lib/session'
 import { AuthContext } from './AuthContext'
 
 export default function AuthProvider({ children }) {
@@ -62,15 +63,22 @@ export default function AuthProvider({ children }) {
     if (!error) setProfile(data)
   }, [userId])
 
-  const signIn = (email, password) =>
-    supabase.auth.signInWithPassword({ email, password })
+  // remember = true: logowanie zostaje po zamknięciu przeglądarki
+  const signIn = (email, password, remember = true) => {
+    setRememberPreference(remember)
+    clearOtherStorageTokens()
+    return supabase.auth.signInWithPassword({ email, password })
+  }
 
-  const signUp = (email, password, displayName) =>
-    supabase.auth.signUp({
+  const signUp = (email, password, displayName, remember = true) => {
+    setRememberPreference(remember)
+    clearOtherStorageTokens()
+    return supabase.auth.signUp({
       email,
       password,
       options: { data: { display_name: displayName } },
     })
+  }
 
   const signOut = async () => {
     clearAllCaches()

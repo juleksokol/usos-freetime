@@ -6,7 +6,7 @@ const buttonClass =
 
 export default function WeekNav({ weekStart, onChange }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex max-w-full flex-wrap items-center gap-2">
       <button
         onClick={() => onChange(addDays(weekStart, -7))}
         className={buttonClass}
@@ -14,7 +14,7 @@ export default function WeekNav({ weekStart, onChange }) {
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
-      <span className="min-w-[11rem] text-center text-sm font-medium text-slate-700">
+      <span className="min-w-0 text-center text-sm font-medium text-slate-700">
         {formatWeekRange(weekStart)}
       </span>
       <button

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import {
   ALL_DAYS,
@@ -10,7 +10,9 @@ import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { useTests } from '../context/TestsContext'
 import { addDays, daysBetween, formatDayMonth, todayISO } from '../lib/dateUtils'
+import { classifyEvent, darkenColor } from '../lib/eventType'
 import { layoutColumns } from '../lib/layout'
+import { countWrappedLines } from '../lib/textFit'
 import { weekMarkers } from '../lib/tests'
 import { minutesToTime, timeToMinutes } from '../lib/timeUtils'
 import EventDetailModal from './EventDetailModal'
@@ -18,6 +20,9 @@ import EventDetailModal from './EventDetailModal'
 const LONG_PRESS_MS = 550
 const TOUCH_DRAG_DELAY_MS = 450
 const SNAP_MIN = 15
+const LINE_HEIGHT = 13.75 // px: text-[11px] + leading-tight
+const TILE_PADDING_Y = 4 // px: py-0.5 u góry i u dołu
+const TILE_TEXT_INSET = 24 // px: lewa ramka 4 + padding 8 + miejsce na kropkę 12
 
 // Zajęcia z planu (nie własne wydarzenia i nie sprawdziany)
 const isClass = (event) => event.source !== 'custom' && event.source !== 'test'
@@ -27,8 +32,19 @@ function currentMinutes() {
   return now.getHours() * 60 + now.getMinutes()
 }
 
+// Pomiar szerokości tekstu kafelka (do sprawdzenia, czy nazwa mieści się w dwóch liniach)
+let measureContext = null
+function createMeasure(fontFamily) {
+  if (!measureContext) {
+    measureContext = document.createElement('canvas').getContext('2d')
+  }
+  measureContext.font = `600 11px ${fontFamily}`
+  return (text) => measureContext.measureText(text).width
+}
+
 /**
  * layers:        [{ id, name, color, watermark?, showMarkers?, applySubjectStyles?, events: [...] }]
+ *                applySubjectStyles = widok własnego planu (własne kolory przedmiotów, prowadzący)
  * highlights:    [{ day, startMin, endMin }]  (opcjonalnie, np. wspólne okienka)
  * weekStart:     "RRRR-MM-DD" poniedziałku (daty w nagłówku, kropki sprawdzianów, linia "teraz")
  * mode:          'view' (domyślnie) albo 'picker' (kafelki z plusem do wyboru zajęć)
@@ -55,6 +71,7 @@ export default function WeekGrid({
   const [selected, setSelected] = useState(null)
   const [draft, setDraft] = useState(null) // zaznaczenie przy przeciąganiu: { day, startMin, endMin }
   const [nowMin, setNowMin] = useState(currentMinutes)
+  const [colWidth, setColWidth] = useState(0) // szerokość kolumny dnia w pikselach
 
   const pressRef = useRef({ timer: null, fired: false, x: 0, y: 0 })
   const dragRef = useRef({
@@ -70,7 +87,15 @@ export default function WeekGrid({
     anchor: 0,
     range: null,
   })
-  const nowLineRef = useRef(null)
+  const scrollerRef = useRef(null)
+  const headerRef = useRef(null)
+  const hourHeadRef = useRef(null)
+  const todayHeaderRef = useRef(null)
+  const firstColumnRef = useRef(null)
+  const topEdgeRef = useRef(null)
+  const bottomEdgeRef = useRef(null)
+  const lastScrollTopRef = useRef(0)
+  const flashTimerRef = useRef(null)
   const scrolledRef = useRef(false)
 
   const picker = mode === 'picker'
@@ -105,18 +130,107 @@ export default function WeekGrid({
     nowMin >= startMin &&
     nowMin <= endMin
 
+  // Pomiar tekstu kafelków (rodzina czcionki z aplikacji)
+  const fontFamily = useMemo(() => getComputedStyle(document.body).fontFamily, [])
+  const measure = colWidth > 0 ? createMeasure(fontFamily) : null
+
   useEffect(() => {
     const timer = setInterval(() => setNowMin(currentMinutes()), 30000)
     return () => clearInterval(timer)
   }, [])
 
-  // Jednorazowe przewinięcie do bieżącej godziny po pokazaniu siatki
+  // Szerokość kolumny dnia (potrzebna do sprawdzenia, czy nazwa mieści się na kafelku)
   useEffect(() => {
-    if (!settings.autoScrollNow || scrolledRef.current || !nowLineRef.current) return
+    const element = firstColumnRef.current
+    if (!element) return
 
+    const update = () => setColWidth(element.offsetWidth)
+    update()
+
+    const observer = new ResizeObserver(update)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [days.length])
+
+  // Neonowa poświata: krawędź jest widoczna, gdy jest co przewijać w tę stronę
+  const updateEdges = () => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+
+    topEdgeRef.current?.setAttribute('data-more', String(scroller.scrollTop > 2))
+    bottomEdgeRef.current?.setAttribute(
+      'data-more',
+      String(scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 2)
+    )
+  }
+
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+
+    updateEdges()
+    const observer = new ResizeObserver(updateEdges)
+    observer.observe(scroller)
+    return () => observer.disconnect()
+  })
+
+  // Przewijanie pionowe: błysk po stronie, w którą przewijasz (aktualizujemy bez renderowania)
+  const handleScroll = (e) => {
+    const scroller = e.currentTarget
+    const previous = lastScrollTopRef.current
+    lastScrollTopRef.current = scroller.scrollTop
+    updateEdges()
+
+    if (scroller.scrollTop === previous) return // przewijanie poziome
+
+    const goingDown = scroller.scrollTop > previous
+    const active = goingDown ? bottomEdgeRef.current : topEdgeRef.current
+    const other = goingDown ? topEdgeRef.current : bottomEdgeRef.current
+
+    other?.classList.remove('neon-active')
+    active?.classList.add('neon-active')
+
+    clearTimeout(flashTimerRef.current)
+    flashTimerRef.current = setTimeout(() => {
+      active?.classList.remove('neon-active')
+    }, 650)
+  }
+
+  // Jednorazowo po pokazaniu siatki: ustaw się na dzisiejszym dniu (poziomo) i bieżącej godzinie
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!settings.autoScrollNow || scrolledRef.current || !scroller || picker) return
     scrolledRef.current = true
-    nowLineRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  }, [settings.autoScrollNow, showNow])
+
+    const hourColumnWidth = hourHeadRef.current?.offsetWidth ?? 0
+    const todayHeader = todayHeaderRef.current
+
+    const left =
+      todayHeader && scroller.scrollWidth > scroller.clientWidth + 2
+        ? Math.max(0, todayHeader.offsetLeft - hourColumnWidth)
+        : null
+
+    const top = showNow
+      ? Math.max(
+          0,
+          (headerRef.current?.offsetHeight ?? 0) + toPx(nowMin) - scroller.clientHeight / 2
+        )
+      : null
+
+    if (left !== null || top !== null) {
+      scroller.scrollTo({
+        ...(left !== null && { left }),
+        ...(top !== null && { top }),
+        behavior: 'smooth',
+      })
+    }
+
+    if (todayColumn !== null) {
+      scroller.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+    // celowo tylko przy pierwszym pokazaniu siatki
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Po aktywowaniu przeciągania na telefonie blokujemy przewijanie strony
   useEffect(() => {
@@ -131,6 +245,7 @@ export default function WeekGrid({
       document.removeEventListener('touchmove', preventScroll)
       clearTimeout(press.timer)
       clearTimeout(drag.timer)
+      clearTimeout(flashTimerRef.current)
       delete document.body.dataset.dragging
     }
   }, [])
@@ -148,6 +263,7 @@ export default function WeekGrid({
   let hiddenCount = 0
   let hasCustom = false
   let hasTests = false
+  let hasTypes = false
 
   layers.forEach((layer, laneIndex) => {
     // Kropki sprawdzianów: tylko na własnych zajęciach (nie na planach znajomych)
@@ -180,19 +296,25 @@ export default function WeekGrid({
 
       // Własny kolor i skrót przedmiotu (kolor tylko na własnym planie)
       const subjectStyle = isClass(event) ? settings.subjectStyles?.[event.title] : null
-      const label =
-        settings.useAbbreviations && subjectStyle?.abbr
-          ? subjectStyle.abbr
-          : event.title
       const color =
         event.tileColor ??
         ((layer.applySubjectStyles && subjectStyle?.color) || layer.color)
 
+      // Rodzaj zajęć: laboratoria są ciemniejsze, litera W / L / S / Z jako znak wodny
+      const type = isClass(event) ? classifyEvent(event) : null
+      const isLab = type?.kind === 'lab'
+      if (settings.showTypeWatermark && type?.letters) hasTypes = true
+
       const item = {
         key: `${layer.id}-${event.id ?? `${event.day_of_week}-${rawStart}-${event.title}`}`,
         event,
-        label,
+        abbr:
+          settings.useAbbreviations && isClass(event) ? (subjectStyle?.abbr ?? null) : null,
         color,
+        shade: isLab ? darkenColor(color, 0.28) : color,
+        isLab,
+        letters: settings.showTypeWatermark ? (type?.letters ?? '') : '',
+        showTeacher: Boolean(layer.applySubjectStyles) && settings.tileShowTeacher,
         ownerName: layer.name,
         watermark: settings.showWatermark ? (layer.watermark ?? null) : null,
         laneIndex,
@@ -401,254 +523,329 @@ export default function WeekGrid({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <div style={{ minWidth: `${days.length * 118 + 48}px` }}>
-          {/* Nagłówek z dniami */}
-          <div
-            className="grid border-b border-slate-200 bg-slate-50"
-            style={gridColumns}
-          >
-            <div />
-            {days.map((day) => {
-              const isToday = day === todayColumn
+      <div className="relative">
+        <div
+          ref={scrollerRef}
+          onScroll={handleScroll}
+          className="no-scrollbar overflow-auto rounded-xl border border-slate-200 bg-white"
+          style={{ maxHeight: 'min(78vh, 720px)' }}
+        >
+          <div style={{ minWidth: `${days.length * 118 + 48}px` }}>
+            {/* Nagłówek z dniami (przyklejony do góry) */}
+            <div
+              ref={headerRef}
+              className="sticky top-0 z-30 grid border-b border-slate-200 bg-slate-50"
+              style={gridColumns}
+            >
+              <div ref={hourHeadRef} className="sticky left-0 z-10 bg-slate-50" />
+              {days.map((day) => {
+                const isToday = day === todayColumn
 
-              return (
-                <div
-                  key={day}
-                  className="border-l border-slate-200 py-2 text-center"
-                >
+                return (
                   <div
-                    className={`text-sm ${
-                      isToday
-                        ? 'font-bold text-indigo-600'
-                        : 'font-semibold text-slate-600'
-                    }`}
+                    key={day}
+                    ref={isToday ? todayHeaderRef : undefined}
+                    className="border-l border-slate-200 py-2 text-center"
                   >
-                    {DAY_NAMES[day]}
-                  </div>
-                  {weekStart && (
                     <div
-                      className={`text-xs ${isToday ? 'text-indigo-600' : 'text-slate-400'}`}
+                      className={`text-sm ${
+                        isToday
+                          ? 'font-bold text-indigo-600'
+                          : 'font-semibold text-slate-600'
+                      }`}
                     >
-                      {formatDayMonth(addDays(weekStart, day - 1))}
+                      {DAY_NAMES[day]}
                     </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Siatka */}
-          <div className="grid" style={gridColumns}>
-            {/* Kolumna z godzinami */}
-            <div className="relative" style={{ height: totalHeight }}>
-              {hours.map((hour) => (
-                <span
-                  key={hour}
-                  className={`absolute right-1 text-xs text-slate-400 ${labelOffsetClass(hour)}`}
-                  style={{ top: (hour - startHour) * hourHeight }}
-                >
-                  {hour}:00
-                </span>
-              ))}
+                    {weekStart && (
+                      <div
+                        className={`text-xs ${isToday ? 'text-indigo-600' : 'text-slate-400'}`}
+                      >
+                        {formatDayMonth(addDays(weekStart, day - 1))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
-            {/* Kolumny dni */}
-            {days.map((day) => (
+            {/* Siatka */}
+            <div className="grid" style={gridColumns}>
+              {/* Kolumna z godzinami (przyklejona do lewej) */}
               <div
-                key={day}
-                className={`relative border-l border-slate-200 ${
-                  canCreate ? 'select-none' : ''
-                }`}
+                className="sticky left-0 z-20 border-r border-slate-100 bg-white"
                 style={{ height: totalHeight }}
-                onPointerDown={canCreate ? (e) => beginDrag(e, day) : undefined}
-                onPointerMove={canCreate ? moveDrag : undefined}
-                onPointerUp={canCreate ? endDrag : undefined}
-                onPointerCancel={canCreate ? finishDrag : undefined}
               >
-                {/* Linie godzin */}
                 {hours.map((hour) => (
-                  <div
+                  <span
                     key={hour}
-                    className="pointer-events-none absolute inset-x-0 border-t border-slate-100"
+                    className={`absolute right-1 text-xs text-slate-400 ${labelOffsetClass(hour)}`}
                     style={{ top: (hour - startHour) * hourHeight }}
-                  />
+                  >
+                    {hour}:00
+                  </span>
                 ))}
+              </div>
 
-                {/* Podświetlone przedziały (wspólne okienka) */}
-                {highlights
-                  .filter((slot) => slot.day === day)
-                  .map((slot) => {
-                    const start = Math.max(slot.startMin, startMin)
-                    const end = Math.min(slot.endMin, endMin)
-                    if (end <= start) return null
-                    const height = toPx(end) - toPx(start)
+              {/* Kolumny dni */}
+              {days.map((day, dayIndex) => (
+                <div
+                  key={day}
+                  ref={dayIndex === 0 ? firstColumnRef : undefined}
+                  className={`relative border-l border-slate-200 ${
+                    canCreate ? 'select-none' : ''
+                  }`}
+                  style={{ height: totalHeight }}
+                  onPointerDown={canCreate ? (e) => beginDrag(e, day) : undefined}
+                  onPointerMove={canCreate ? moveDrag : undefined}
+                  onPointerUp={canCreate ? endDrag : undefined}
+                  onPointerCancel={canCreate ? finishDrag : undefined}
+                >
+                  {/* Linie godzin */}
+                  {hours.map((hour) => (
+                    <div
+                      key={hour}
+                      className="pointer-events-none absolute inset-x-0 border-t border-slate-100"
+                      style={{ top: (hour - startHour) * hourHeight }}
+                    />
+                  ))}
+
+                  {/* Podświetlone przedziały (wspólne okienka) */}
+                  {highlights
+                    .filter((slot) => slot.day === day)
+                    .map((slot) => {
+                      const start = Math.max(slot.startMin, startMin)
+                      const end = Math.min(slot.endMin, endMin)
+                      if (end <= start) return null
+                      const height = toPx(end) - toPx(start)
+
+                      return (
+                        <div
+                          key={`${slot.day}-${slot.startMin}-${slot.endMin}`}
+                          className="slot-pulse pointer-events-none absolute inset-x-0 z-0 border-y border-dashed border-green-500 bg-green-300/30"
+                          style={{ top: toPx(start), height }}
+                        >
+                          {height >= 28 && (
+                            <span className="block px-1 pt-0.5 text-[10px] font-medium text-green-800">
+                              {minutesToTime(start)}–{minutesToTime(end)}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+
+                  {/* Zajęcia (klikalne kafelki) */}
+                  {blocksByDay[day].map((block) => {
+                    const index = blockIndex++
+                    const height = Math.max(toPx(block.end) - toPx(block.start), 18)
+                    const { event } = block
+
+                    const widthPct = laneWidth / block.cols
+                    const leftPct = block.laneIndex * laneWidth + block.col * widthPct
+
+                    // Ile linii zajmie pełna nazwa i ile mieści kafelek (maksymalnie 2)?
+                    // Skrót pokazujemy tylko wtedy, gdy pełna nazwa się nie mieści.
+                    const tileWidth = colWidth * (widthPct / 100) - 2
+                    const textWidth = Math.max(24, tileWidth - TILE_TEXT_INSET)
+                    const fullLines = measure
+                      ? countWrappedLines(event.title, textWidth, measure)
+                      : 1
+                    const maxTitleLines = Math.min(
+                      2,
+                      Math.max(1, Math.floor((height - TILE_PADDING_Y) / LINE_HEIGHT))
+                    )
+                    const useAbbr = Boolean(block.abbr) && fullLines > maxTitleLines
+                    const label = useAbbr ? block.abbr : event.title
+                    const titleLines = useAbbr ? 1 : Math.min(fullLines, maxTitleLines)
+
+                    // Znak wodny z pseudonimem pomijamy na bardzo krótkich blokach
+                    const hasWatermark = Boolean(block.watermark) && height >= 32
+
+                    // Dodatkowe wiersze (godziny, sala, prowadzący) tyle, ile się zmieści
+                    const freeHeight =
+                      height - TILE_PADDING_Y - titleLines * LINE_HEIGHT - (hasWatermark ? 10 : 0)
+                    const rowCapacity = Math.max(0, Math.floor(freeHeight / LINE_HEIGHT))
+                    const rows = [
+                      settings.tileShowTime && {
+                        key: 'time',
+                        text: `${event.start_time.slice(0, 5)}–${event.end_time.slice(0, 5)}`,
+                        className: 'text-slate-600',
+                      },
+                      settings.tileShowLocation &&
+                        event.location && {
+                          key: 'location',
+                          text: event.location,
+                          className: 'text-slate-500',
+                        },
+                      block.showTeacher &&
+                        event.teacher && {
+                          key: 'teacher',
+                          text: event.teacher,
+                          className: 'text-slate-500',
+                        },
+                    ]
+                      .filter(Boolean)
+                      .slice(0, rowCapacity)
+
+                    const showLetters =
+                      Boolean(block.letters) && height >= 28 && tileWidth >= 44
+
+                    const style = {
+                      top: toPx(block.start),
+                      height,
+                      left: `calc(${leftPct}% + 1px)`,
+                      width: `calc(${widthPct}% - 2px)`,
+                      backgroundColor: block.isLab
+                        ? `${block.shade}38`
+                        : `${block.color}26`,
+                      borderLeft: `4px solid ${block.shade}`,
+                      animationDelay: `${Math.min(index, 24) * 14}ms`,
+                    }
+
+                    if (block.isTest) {
+                      // Sprawdziany: mocniejszy kolor i ramka dookoła
+                      style.backgroundColor = `${block.color}38`
+                      style.border = `2px solid ${block.color}`
+                    } else if (block.isCustom) {
+                      // Własne wydarzenia: przerywana ramka i delikatny ukośny wzór
+                      style.borderTop = `1px dashed ${block.color}`
+                      style.borderRight = `1px dashed ${block.color}`
+                      style.borderBottom = `1px dashed ${block.color}`
+                      style.backgroundImage = `repeating-linear-gradient(135deg, transparent 0px, transparent 5px, ${block.color}24 5px, ${block.color}24 10px)`
+                    }
+
+                    const pressable = canLongPress(block)
+                    const pressHandlers = pressable
+                      ? {
+                          onPointerDown: (e) => startPress(e, block),
+                          onPointerMove: movePress,
+                          onPointerUp: cancelPress,
+                          onPointerLeave: cancelPress,
+                          onPointerCancel: cancelPress,
+                          onContextMenu: (e) => e.preventDefault(),
+                        }
+                      : {}
+
+                    if (pressable) {
+                      style.WebkitTouchCallout = 'none'
+                      style.WebkitUserSelect = 'none'
+                    }
 
                     return (
-                      <div
-                        key={`${slot.day}-${slot.startMin}-${slot.endMin}`}
-                        className="slot-pulse pointer-events-none absolute inset-x-0 z-0 border-y border-dashed border-green-500 bg-green-300/30"
-                        style={{ top: toPx(start), height }}
+                      <button
+                        type="button"
+                        key={block.key}
+                        onClick={() => handleTileClick(block)}
+                        {...pressHandlers}
+                        className={`tile-anim absolute z-10 overflow-hidden rounded-md px-1 py-0.5 text-left text-[11px] leading-tight text-slate-800 transition hover:z-20 hover:shadow-md hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                          pressable ? 'select-none' : ''
+                        }`}
+                        style={style}
+                        title={[
+                          picker ? `Dodaj sprawdzian dla: ${event.title}` : null,
+                          block.watermark ? `Osoba: ${block.ownerName}` : null,
+                          event.title,
+                          `${event.start_time.slice(0, 5)}–${event.end_time.slice(0, 5)}`,
+                          event.location,
+                          event.event_type,
+                          event.teacher,
+                          block.marker ? `Sprawdzian: ${block.marker.label}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join('\n')}
                       >
-                        {height >= 28 && (
-                          <span className="block px-1 pt-0.5 text-[10px] font-medium text-green-800">
-                            {minutesToTime(start)}–{minutesToTime(end)}
+                        {showLetters && (
+                          <span
+                            className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 select-none font-black leading-none"
+                            style={{
+                              fontSize: Math.min(28, height * 0.55),
+                              color: block.shade,
+                              opacity: 0.16,
+                            }}
+                          >
+                            {block.letters}
                           </span>
                         )}
-                      </div>
+
+                        <span
+                          className="relative block break-words pr-3 font-semibold"
+                          style={{
+                            display: '-webkit-box',
+                            WebkitBoxOrient: 'vertical',
+                            WebkitLineClamp: titleLines,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {label}
+                        </span>
+
+                        {rows.map((row) => (
+                          <span
+                            key={row.key}
+                            className={`relative block truncate ${row.className}`}
+                          >
+                            {row.text}
+                          </span>
+                        ))}
+
+                        {block.marker && (
+                          <span
+                            className="pointer-events-none absolute right-1 top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white"
+                            style={{ backgroundColor: block.marker.color }}
+                          />
+                        )}
+
+                        {picker && (
+                          <span className="pointer-events-none absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white shadow">
+                            <Plus className="h-3.5 w-3.5" />
+                          </span>
+                        )}
+
+                        {hasWatermark && (
+                          <span
+                            className="pointer-events-none absolute bottom-0.5 right-1 max-w-[85%] truncate text-[9px] font-bold uppercase tracking-wide opacity-50"
+                            style={{ color: block.color }}
+                          >
+                            {block.watermark}
+                          </span>
+                        )}
+                      </button>
                     )
                   })}
 
-                {/* Zajęcia (klikalne kafelki) */}
-                {blocksByDay[day].map((block) => {
-                  const index = blockIndex++
-                  const height = Math.max(toPx(block.end) - toPx(block.start), 18)
-                  const { event } = block
-
-                  // Znak wodny pomijamy na bardzo krótkich blokach, żeby nie zasłaniał nazwy
-                  const hasWatermark = Boolean(block.watermark) && height >= 32
-                  const showTime =
-                    settings.tileShowTime && height >= (hasWatermark ? 46 : 40)
-                  const showLocation =
-                    settings.tileShowLocation &&
-                    Boolean(event.location) &&
-                    height >= (hasWatermark ? 66 : 54)
-
-                  const widthPct = laneWidth / block.cols
-                  const leftPct = block.laneIndex * laneWidth + block.col * widthPct
-
-                  const style = {
-                    top: toPx(block.start),
-                    height,
-                    left: `calc(${leftPct}% + 1px)`,
-                    width: `calc(${widthPct}% - 2px)`,
-                    backgroundColor: `${block.color}26`,
-                    borderLeft: `4px solid ${block.color}`,
-                    animationDelay: `${Math.min(index, 24) * 14}ms`,
-                  }
-
-                  if (block.isTest) {
-                    // Sprawdziany: mocniejszy kolor i ramka dookoła
-                    style.backgroundColor = `${block.color}38`
-                    style.border = `2px solid ${block.color}`
-                  } else if (block.isCustom) {
-                    // Własne wydarzenia: przerywana ramka i delikatny ukośny wzór
-                    style.borderTop = `1px dashed ${block.color}`
-                    style.borderRight = `1px dashed ${block.color}`
-                    style.borderBottom = `1px dashed ${block.color}`
-                    style.backgroundImage = `repeating-linear-gradient(135deg, transparent 0px, transparent 5px, ${block.color}24 5px, ${block.color}24 10px)`
-                  }
-
-                  const pressable = canLongPress(block)
-                  const pressHandlers = pressable
-                    ? {
-                        onPointerDown: (e) => startPress(e, block),
-                        onPointerMove: movePress,
-                        onPointerUp: cancelPress,
-                        onPointerLeave: cancelPress,
-                        onPointerCancel: cancelPress,
-                        onContextMenu: (e) => e.preventDefault(),
-                      }
-                    : {}
-
-                  if (pressable) {
-                    style.WebkitTouchCallout = 'none'
-                    style.WebkitUserSelect = 'none'
-                  }
-
-                  return (
-                    <button
-                      type="button"
-                      key={block.key}
-                      onClick={() => handleTileClick(block)}
-                      {...pressHandlers}
-                      className={`tile-anim absolute z-10 overflow-hidden rounded-md px-1 py-0.5 text-left text-[11px] leading-tight text-slate-800 transition hover:z-20 hover:shadow-md hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-                        pressable ? 'select-none' : ''
-                      }`}
-                      style={style}
-                      title={[
-                        picker ? `Dodaj sprawdzian dla: ${event.title}` : null,
-                        block.watermark ? `Osoba: ${block.ownerName}` : null,
-                        event.title,
-                        `${event.start_time.slice(0, 5)}–${event.end_time.slice(0, 5)}`,
-                        event.location,
-                        event.event_type,
-                        event.teacher,
-                        block.marker ? `Sprawdzian: ${block.marker.label}` : null,
-                      ]
-                        .filter(Boolean)
-                        .join('\n')}
+                  {/* Zaznaczenie podczas przeciągania (nowe wydarzenie) */}
+                  {draft && draft.day === day && (
+                    <div
+                      className="pointer-events-none absolute inset-x-1 z-30 rounded-md border-2 border-dashed border-indigo-500 bg-indigo-500/15"
+                      style={{
+                        top: toPx(draft.startMin),
+                        height: toPx(draft.endMin) - toPx(draft.startMin),
+                      }}
                     >
-                      <span className="block truncate pr-3 font-semibold">
-                        {block.label}
+                      <span className="block px-1 text-[10px] font-semibold text-indigo-600">
+                        {minutesToTime(draft.startMin)}–{minutesToTime(draft.endMin)}
                       </span>
-                      {showTime && (
-                        <span className="block truncate text-slate-600">
-                          {event.start_time.slice(0, 5)}–
-                          {event.end_time.slice(0, 5)}
-                        </span>
-                      )}
-                      {showLocation && (
-                        <span className="block truncate text-slate-500">
-                          {event.location}
-                        </span>
-                      )}
+                    </div>
+                  )}
 
-                      {block.marker && (
-                        <span
-                          className="pointer-events-none absolute right-1 top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white"
-                          style={{ backgroundColor: block.marker.color }}
-                        />
-                      )}
-
-                      {picker && (
-                        <span className="pointer-events-none absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white shadow">
-                          <Plus className="h-3.5 w-3.5" />
-                        </span>
-                      )}
-
-                      {hasWatermark && (
-                        <span
-                          className="pointer-events-none absolute bottom-0.5 right-1 max-w-[85%] truncate text-[9px] font-bold uppercase tracking-wide opacity-50"
-                          style={{ color: block.color }}
-                        >
-                          {block.watermark}
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-
-                {/* Zaznaczenie podczas przeciągania (nowe wydarzenie) */}
-                {draft && draft.day === day && (
-                  <div
-                    className="pointer-events-none absolute inset-x-1 z-30 rounded-md border-2 border-dashed border-indigo-500 bg-indigo-500/15"
-                    style={{
-                      top: toPx(draft.startMin),
-                      height: toPx(draft.endMin) - toPx(draft.startMin),
-                    }}
-                  >
-                    <span className="block px-1 text-[10px] font-semibold text-indigo-600">
-                      {minutesToTime(draft.startMin)}–{minutesToTime(draft.endMin)}
-                    </span>
-                  </div>
-                )}
-
-                {/* Linia "teraz" */}
-                {showNow && day === todayColumn && (
-                  <div
-                    ref={nowLineRef}
-                    className="pointer-events-none absolute inset-x-0 z-20"
-                    style={{ top: toPx(nowMin) }}
-                  >
-                    <div className="h-0.5 bg-red-500" />
-                    <span className="absolute -left-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500" />
-                  </div>
-                )}
-              </div>
-            ))}
+                  {/* Linia "teraz" */}
+                  {showNow && day === todayColumn && (
+                    <div
+                      className="pointer-events-none absolute inset-x-0 z-20"
+                      style={{ top: toPx(nowMin) }}
+                    >
+                      <div className="h-0.5 bg-red-500" />
+                      <span className="absolute -left-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Neonowa poświata u góry i u dołu planu */}
+        <div ref={topEdgeRef} className="neon-edge neon-top" data-more="false" />
+        <div ref={bottomEdgeRef} className="neon-edge neon-bottom" data-more="false" />
       </div>
 
       {picker && (
@@ -669,6 +866,13 @@ export default function WeekGrid({
         <p className="text-xs text-slate-500">
           Aby dodać własne wydarzenie, przeciągnij po pustym miejscu (na
           telefonie: przytrzymaj puste miejsce i przeciągnij).
+        </p>
+      )}
+
+      {hasTypes && (
+        <p className="text-xs text-slate-500">
+          Litera na kafelku: W wykład, L laboratorium (ciemniejszy odcień), S
+          seminarium, Z zajęcia zdalne.
         </p>
       )}
 
