@@ -280,7 +280,7 @@ main :where(button, select, input, textarea) {
   opacity: 1;
   animation: neon-pulse 0.65s ease-out;
 }
-*/
+
 @keyframes neon-pulse {
   0% {
     filter: brightness(2.2);
@@ -289,7 +289,7 @@ main :where(button, select, input, textarea) {
     filter: brightness(1);
   }
 }
-
+*/
 /* ===== Animacje ===== */
 @keyframes fade-up {
   from {
