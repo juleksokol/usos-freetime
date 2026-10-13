@@ -219,6 +219,7 @@ main :where(button, select, input, textarea) {
 /* ===== Neonowa poświata u góry i u dołu planu =====
    data-more="true": jest coś do przewinięcia (blada poświata),
    .neon-active: właśnie przewijasz w tę stronę (jasny błysk) */
+/*
 .neon-edge {
   position: absolute;
   left: 0;
@@ -239,7 +240,7 @@ main :where(button, select, input, textarea) {
     transparent
   );
 }
-
+*/
 .neon-bottom {
   bottom: 0;
   border-radius: 0 0 12px 12px;
