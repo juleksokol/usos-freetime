@@ -23,20 +23,27 @@ describe('rodzaje zajęć (litery znaku wodnego)', () => {
     expect(classifyEvent({ event_type: 'zajęcia seminaryjne', location: 'C-1' }).letters).toBe('S')
     expect(classifyEvent({ event_type: 'wykład', location: 'Wirtualna' }).letters).toBe('WZ')
     expect(classifyEvent({ event_type: null, location: 'Teams' }).letters).toBe('Z')
-    expect(classifyEvent({ event_type: 'ćwiczenia audytoryjne', location: 'A-2' }).letters).toBe('L')
   })
 
-  it('zajęcia innych rodzajów nie dostają litery', () => {
-    expect(classifyEvent({ event_type: 'Ćwiczenia projektowe', location: 'A-2' }).kind).toBe('other')
+  it('ćwiczenia, projekty i konwersatoria też mają swoje litery', () => {
+    expect(classifyEvent({ event_type: 'Ćwiczenia audytoryjne', location: 'A-2' }).letters).toBe('Ć')
+    expect(classifyEvent({ event_type: 'Ćwiczenia projektowe', location: 'A-2' }).letters).toBe('P')
+    expect(classifyEvent({ event_type: 'konwersatorium', location: 'A-2' }).letters).toBe('K')
+    expect(classifyEvent({ event_type: 'Ćwiczenia audytoryjne', location: 'Wirtualna' }).letters).toBe('ĆZ')
+  })
+
+  it('zajęcia nierozpoznanych rodzajów nie dostają litery', () => {
+    expect(classifyEvent({ event_type: 'zajęcia warsztatowe', location: 'A-2' }).letters).toBe('')
+    expect(classifyEvent({ event_type: 'Hala', location: 'Hala' }).letters).toBe('')
     expect(classifyEvent({ event_type: null, location: null }).letters).toBe('')
   })
 
   it('klasyfikuje prawdziwe plany', () => {
     const usos = parseUsosCsv(fixture('plan_zajec_csv.csv')).events
-    expect(countLetters(usos)).toEqual({ W: 68, WZ: 10, '-': 59, L: 59, S: 5 })
+    expect(countLetters(usos)).toEqual({ W: 68, WZ: 10, Ć: 45, L: 59, S: 5, K: 10, '-': 4 })
 
     const unitime = parseUsosCsv(fixture('events-2.csv')).events
-    expect(countLetters(unitime)).toEqual({ W: 72, '-': 83, L: 33 })
+    expect(countLetters(unitime)).toEqual({ W: 72, '-': 15, L: 33, P: 38, Ć: 30 })
   })
 })
 

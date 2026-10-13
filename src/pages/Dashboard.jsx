@@ -1,19 +1,15 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CalendarCheck,
   CalendarClock,
   CalendarDays,
+  Check,
   ClipboardList,
   Layers,
   Loader2,
   LogOut,
+  Pencil,
+  RotateCcw,
   Search,
   Settings as SettingsIcon,
   Users,
@@ -21,6 +17,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { TestsContext } from '../context/TestsContext'
+import { mergeVisibleOrder, resolveOrder } from '../lib/blockOrder'
 import { getPalette } from '../lib/constants'
 import { defaultWeekStart, eventsForWeek, mondayOf } from '../lib/dateUtils'
 import { loadCache, saveCache } from '../lib/offlineCache'
@@ -34,20 +31,19 @@ import useSwipeNavigation from '../hooks/useSwipeNavigation'
 import useTestReminders from '../hooks/useTestReminders'
 import CustomEvents from '../components/CustomEvents'
 import ExtraSettings from '../components/ExtraSettings'
-import FreeNowWidget from '../components/FreeNowWidget'
 import GroupsPanel from '../components/GroupsPanel'
 import ImportSchedule from '../components/ImportSchedule'
 import OverlayView from '../components/OverlayView'
 import PlanSettings from '../components/PlanSettings'
-import PushupCounter from '../components/PushupCounter'
 import QuickEventDialog from '../components/QuickEventDialog'
+import ReorderableList from '../components/ReorderableList'
 import SearchModal from '../components/SearchModal'
 import SettingsPanel from '../components/SettingsPanel'
+import TabBar from '../components/TabBar'
 import TestDialog from '../components/TestDialog'
 import TestsTab from '../components/TestsTab'
 import ThemeToggle from '../components/ThemeToggle'
-import TodayView from '../components/TodayView'
-import UpcomingTests from '../components/UpcomingTests'
+import TodayTab from '../components/TodayTab'
 import WeekGrid from '../components/WeekGrid'
 import WeekNav from '../components/WeekNav'
 
@@ -60,9 +56,24 @@ const TABS = [
   { id: 'settings', label: 'Ustawienia', icon: SettingsIcon },
 ]
 
+const ALL_TAB_IDS = TABS.map((item) => item.id)
+const PLAN_IDS = ['planGrid', 'customEvents', 'import']
+
 export default function Dashboard() {
   const { user, profile, signOut } = useAuth()
-  const { settings, isDark } = useSettings()
+  const { settings, updateSettings, isDark } = useSettings()
+
+  // Tryb edycji układu (ołówek): przeciąganie bloków i zakładek
+  const [editMode, setEditMode] = useState(false)
+  const layoutOrder = settings.layoutOrder ?? {}
+
+  const setOrder = (key) => (newOrder) =>
+    updateSettings({ layoutOrder: { ...layoutOrder, [key]: newOrder } })
+
+  const resetLayout = () => {
+    if (!window.confirm('Przywrócić domyślny układ bloków i zakładek?')) return
+    updateSettings({ layoutOrder: {} })
+  }
 
   // Zakładka startowa: ostatnio używana albo wybrana w ustawieniach
   const [lastTab, setLastTab] = usePersistentState('freetime:tab', 'today')
@@ -70,9 +81,12 @@ export default function Dashboard() {
     settings.startTab === 'last' ? lastTab : settings.startTab
   )
 
-  const visibleTabs = TABS.filter(
-    (item) => item.id === 'settings' || !settings.hiddenTabs.includes(item.id)
-  )
+  // Zakładki w zapisanej kolejności, bez ukrytych
+  const tabOrder = resolveOrder(layoutOrder.tabs, ALL_TAB_IDS)
+  const visibleTabs = tabOrder
+    .map((id) => TABS.find((item) => item.id === id))
+    .filter((item) => item.id === 'settings' || !settings.hiddenTabs.includes(item.id))
+
   const tab = visibleTabs.some((item) => item.id === sessionTab)
     ? sessionTab
     : visibleTabs[0].id
@@ -81,6 +95,9 @@ export default function Dashboard() {
     setSessionTab(id)
     setLastTab(id)
   }
+
+  const handleTabsReorder = (newVisibleIds) =>
+    setOrder('tabs')(mergeVisibleOrder(tabOrder, newVisibleIds))
 
   const showPanel = (id) => !settings.hiddenPanels.includes(id)
 
@@ -101,9 +118,9 @@ export default function Dashboard() {
   const name = profile?.display_name ?? user?.email
   const userId = user?.id
 
-  // Przesuwanie palcem między tygodniami i dniami
+  // Przesuwanie palcem między tygodniami i dniami (wyłączone w trybie edycji)
   const mainRef = useRef(null)
-  useSwipeNavigation(mainRef, settings.swipeNav)
+  useSwipeNavigation(mainRef, settings.swipeNav && !editMode)
 
   const loadEvents = useCallback(async () => {
     if (!userId) return
@@ -162,13 +179,14 @@ export default function Dashboard() {
     hour: settings.reminderHour,
   })
 
-  // Skrót Ctrl+K (Cmd+K) otwiera wyszukiwarkę
+  // Skróty klawiszowe: Ctrl+K (Cmd+K) otwiera wyszukiwarkę, Esc kończy tryb edycji
   useEffect(() => {
     const handleKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setSearchOpen(true)
       }
+      if (e.key === 'Escape') setEditMode(false)
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
@@ -190,29 +208,6 @@ export default function Dashboard() {
     const timer = setTimeout(() => root.classList.remove('theme-fade'), 450)
     return () => clearTimeout(timer)
   }, [isDark])
-
-  // Przesuwany wskaźnik aktywnej zakładki
-  const tabRefs = useRef({})
-  const [indicator, setIndicator] = useState({ left: 0, width: 0 })
-
-  useLayoutEffect(() => {
-    const update = () => {
-      const element = tabRefs.current[tab]
-      if (element) {
-        setIndicator({ left: element.offsetLeft, width: element.offsetWidth })
-      }
-    }
-
-    update()
-    tabRefs.current[tab]?.scrollIntoView({
-      inline: 'center',
-      block: 'nearest',
-      behavior: 'smooth',
-    })
-
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [tab, visibleTabs.length, settings.fontScale])
 
   // Sprawdziany jako kafelki do narysowania na planie
   const testEvents = useMemo(() => tests.map(testToEvent), [tests])
@@ -268,22 +263,80 @@ export default function Dashboard() {
     },
   ]
 
+  // Blok "Mój plan (siatka)"
+  const planGrid = (
+    <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-slate-800">Mój tygodniowy plan</h2>
+        <WeekNav weekStart={weekStart} onChange={setWeekStart} />
+      </div>
+
+      <div className="mt-4">
+        {loadingEvents ? (
+          <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+        ) : loadError ? (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {loadError}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {events.length === 0 && (
+              <p className="text-sm text-slate-500">
+                Nie masz jeszcze zapisanych zajęć. Zaimportuj plik poniżej albo
+                dodaj własne wydarzenie.
+              </p>
+            )}
+            {events.length > 0 && weekEvents.length === 0 && (
+              <p className="text-sm text-slate-500">
+                W tym tygodniu nie masz zajęć. Użyj strzałek, aby przejść do
+                innego tygodnia.
+              </p>
+            )}
+            <WeekGrid
+              layers={myLayers}
+              weekStart={weekStart}
+              onLongPress={({ event, date }) => openDialog(draftFromTile(event, date))}
+              onEditTest={openTestById}
+              onCreateRange={({ date, startMin, endMin }) =>
+                setQuickDraft({
+                  date,
+                  start: minutesToTime(startMin),
+                  end: minutesToTime(endMin),
+                })
+              }
+            />
+          </div>
+        )}
+      </div>
+    </section>
+  )
+
   return (
     <TestsContext.Provider value={testsValue}>
       <div className="min-h-screen">
         <header className="app-header shadow-sm">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2">
-              <CalendarClock className="logo-icon h-6 w-6 text-indigo-600" />
-              <span className="text-lg font-bold text-slate-800">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <CalendarClock className="logo-icon h-6 w-6 shrink-0 text-indigo-600" />
+              <span className="truncate text-lg font-bold text-slate-800">
                 USOS FreeTime
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="hidden text-sm text-slate-600 sm:inline">
-                {name}
-              </span>
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              <span className="hidden text-sm text-slate-600 md:inline">{name}</span>
+              <button
+                onClick={() => setEditMode((value) => !value)}
+                className={`flex items-center gap-1.5 rounded-lg border p-2 text-sm transition ${
+                  editMode
+                    ? 'border-indigo-600 bg-indigo-600 text-white'
+                    : 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+                aria-label={editMode ? 'Zakończ edycję układu' : 'Edytuj układ'}
+                title={editMode ? 'Zakończ edycję układu' : 'Edytuj układ (przeciąganie bloków)'}
+              >
+                {editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+              </button>
               <button
                 onClick={() => setSearchOpen(true)}
                 className="rounded-lg border border-slate-300 p-2 text-slate-700 transition hover:bg-slate-100"
@@ -295,40 +348,51 @@ export default function Dashboard() {
               <ThemeToggle />
               <button
                 onClick={signOut}
-                className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-300 p-2 text-sm text-slate-700 transition hover:bg-slate-100 sm:px-3 sm:py-1.5"
+                aria-label="Wyloguj"
               >
                 <LogOut className="h-4 w-4" />
-                Wyloguj
+                <span className="hidden sm:inline">Wyloguj</span>
               </button>
             </div>
           </div>
 
-          <nav className="relative mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4">
-            {visibleTabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                ref={(element) => {
-                  tabRefs.current[id] = element
-                }}
-                onClick={() => selectTab(id)}
-                className={`flex shrink-0 items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
-                  tab === id
-                    ? 'text-indigo-600'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </button>
-            ))}
-            <span
-              className="tab-indicator"
-              style={{ left: indicator.left, width: indicator.width }}
-            />
-          </nav>
+          <TabBar
+            tabs={visibleTabs}
+            activeId={tab}
+            onSelect={selectTab}
+            editing={editMode}
+            onReorder={handleTabsReorder}
+          />
         </header>
 
         <main ref={mainRef} className="mx-auto max-w-5xl p-4 sm:p-6">
+          {editMode && (
+            <div className="modal-card mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-indigo-400 bg-indigo-50 px-4 py-3 text-sm text-slate-700">
+              <p className="min-w-0 flex-1">
+                <strong className="text-indigo-600">Tryb edycji układu.</strong>{' '}
+                Przeciągaj bloki za uchwyt z nazwą oraz zakładki u góry. Układ
+                zapisuje się na koncie.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={resetLayout}
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-slate-700 transition hover:bg-slate-100"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Domyślny układ
+                </button>
+                <button
+                  onClick={() => setEditMode(false)}
+                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  <Check className="h-4 w-4" />
+                  Gotowe
+                </button>
+              </div>
+            </div>
+          )}
+
           {offlineNote && (
             <p className="mb-6 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
               {offlineNote}
@@ -337,74 +401,41 @@ export default function Dashboard() {
 
           <div key={tab} className="stagger flex flex-col gap-6">
             {tab === 'today' && (
-              <>
-                {showPanel('freeNow') && <FreeNowWidget syncTick={syncTick} />}
-                {showPanel('pushups') && <PushupCounter />}
-                {showPanel('upcomingTests') && (
-                  <UpcomingTests tests={tests} onOpen={openTest} />
-                )}
-                <TodayView syncTick={syncTick} />
-              </>
+              <TodayTab
+                syncTick={syncTick}
+                tests={tests}
+                onOpenTest={openTest}
+                editing={editMode}
+                order={layoutOrder.today}
+                onReorder={setOrder('today')}
+              />
             )}
 
             {tab === 'plan' && (
-              <>
-                <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-lg font-semibold text-slate-800">
-                      Mój tygodniowy plan
-                    </h2>
-                    <WeekNav weekStart={weekStart} onChange={setWeekStart} />
-                  </div>
-
-                  <div className="mt-4">
-                    {loadingEvents ? (
-                      <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
-                    ) : loadError ? (
-                      <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                        {loadError}
-                      </p>
-                    ) : (
-                      <div className="flex flex-col gap-3">
-                        {events.length === 0 && (
-                          <p className="text-sm text-slate-500">
-                            Nie masz jeszcze zapisanych zajęć. Zaimportuj plik
-                            poniżej albo dodaj własne wydarzenie.
-                          </p>
-                        )}
-                        {events.length > 0 && weekEvents.length === 0 && (
-                          <p className="text-sm text-slate-500">
-                            W tym tygodniu nie masz zajęć. Użyj strzałek, aby
-                            przejść do innego tygodnia.
-                          </p>
-                        )}
-                        <WeekGrid
-                          layers={myLayers}
-                          weekStart={weekStart}
-                          onLongPress={({ event, date }) =>
-                            openDialog(draftFromTile(event, date))
-                          }
-                          onEditTest={openTestById}
-                          onCreateRange={({ date, startMin, endMin }) =>
-                            setQuickDraft({
-                              date,
-                              start: minutesToTime(startMin),
-                              end: minutesToTime(endMin),
-                            })
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
-                </section>
-
-                {showPanel('customEvents') && (
-                  <CustomEvents events={events} onChanged={loadEvents} />
-                )}
-                {showPanel('import') && (
-                  <ImportSchedule onImported={loadEvents} existing={events} />
-                )}
-              </>
+              <ReorderableList
+                id="plan"
+                allIds={PLAN_IDS}
+                order={layoutOrder.plan}
+                editing={editMode}
+                onReorder={setOrder('plan')}
+                items={[
+                  { id: 'planGrid', label: 'Mój plan (siatka)', node: planGrid },
+                  {
+                    id: 'customEvents',
+                    label: 'Własne wydarzenia',
+                    node: showPanel('customEvents') ? (
+                      <CustomEvents events={events} onChanged={loadEvents} />
+                    ) : null,
+                  },
+                  {
+                    id: 'import',
+                    label: 'Import planu',
+                    node: showPanel('import') ? (
+                      <ImportSchedule onImported={loadEvents} existing={events} />
+                    ) : null,
+                  },
+                ]}
+              />
             )}
 
             {tab === 'tests' && (
@@ -419,7 +450,14 @@ export default function Dashboard() {
 
             {tab === 'groups' && <GroupsPanel />}
 
-            {tab === 'overlay' && <OverlayView syncTick={syncTick} />}
+            {tab === 'overlay' && (
+              <OverlayView
+                syncTick={syncTick}
+                editing={editMode}
+                order={layoutOrder.overlay}
+                onReorder={setOrder('overlay')}
+              />
+            )}
 
             {tab === 'settings' && (
               <>

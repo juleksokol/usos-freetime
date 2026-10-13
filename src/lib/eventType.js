@@ -1,13 +1,21 @@
 import { normalizeText } from './text'
 
-// Litery znaku wodnego: W = wykład, L = laboratorium, S = seminarium, Z = zajęcia zdalne
-const KIND_LETTERS = { lecture: 'W', lab: 'L', seminar: 'S' }
+// Litery znaku wodnego: W = wykład, Ć = ćwiczenia, L = laboratorium, P = projekt,
+// S = seminarium, K = konwersatorium, Z = zajęcia zdalne
+const KIND_LETTERS = {
+  lecture: 'W',
+  exercise: 'Ć',
+  lab: 'L',
+  project: 'P',
+  seminar: 'S',
+  conversatory: 'K',
+}
 
 /**
  * Rozpoznaje rodzaj zajęć po polach "rodzaj" i "miejsce":
- *  kind:    'lecture' | 'lab' | 'seminar' | 'other'
+ *  kind:    'lecture' | 'exercise' | 'lab' | 'project' | 'seminar' | 'conversatory' | 'other'
  *  remote:  zajęcia zdalne (sala wirtualna, online, Teams itp.)
- *  letters: litery znaku wodnego, np. "W", "L", "WZ", "Z" (pusty tekst, gdy nic nie rozpoznano)
+ *  letters: litery znaku wodnego, np. "W", "Ć", "WZ", "Z" (pusty tekst, gdy nic nie rozpoznano)
  */
 export function classifyEvent(event) {
   const type = normalizeText(event.event_type)
@@ -17,6 +25,9 @@ export function classifyEvent(event) {
   if (type.includes('wyklad')) kind = 'lecture'
   else if (type.includes('seminar')) kind = 'seminar'
   else if (type.includes('laborator') || /(^| )lab( |$)/.test(type)) kind = 'lab'
+  else if (type.includes('projekt')) kind = 'project'
+  else if (type.includes('cwiczen') || type.includes('audytoryjn')) kind = 'exercise'
+  else if (type.includes('konwersator')) kind = 'conversatory'
 
   const remote =
     /wirtual|online|zdaln|teams|zoom|(^| )meet( |$)/.test(place) ||

@@ -23,12 +23,20 @@ import { minutesToTime } from '../lib/timeUtils'
 import useGroups from '../hooks/useGroups'
 import usePersistentState from '../hooks/usePersistentState'
 import useSchedules from '../hooks/useSchedules'
+import PlanLegend from './PlanLegend'
+import ReorderableList from './ReorderableList'
 import WeekGrid from './WeekGrid'
 import WeekNav from './WeekNav'
 
 const DURATION_OPTIONS = [30, 45, 60, 90]
+const ALL_IDS = ['controls', 'legend', 'grid', 'slots']
 
-export default function OverlayView({ syncTick = 0 }) {
+/**
+ * Zakładka "Wspólne okienka" złożona z przesuwanych bloków:
+ * ustawienia i osoby, legenda, plan, lista okienek.
+ * editing / order / onReorder: tryb edycji układu
+ */
+export default function OverlayView({ syncTick = 0, editing, order, onReorder }) {
   const { user } = useAuth()
   const { settings, updateSettings } = useSettings()
   const userId = user?.id
@@ -164,117 +172,128 @@ export default function OverlayView({ syncTick = 0 }) {
   }
 
   const selectClass =
-    'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
+    'max-w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
 
-  const quickButtonClass =
-    'flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100'
+  const iconButtonClass =
+    'flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 text-slate-600 transition hover:bg-slate-100'
 
-  return (
-    <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            Grupa:
-            <select
-              value={groupId}
-              onChange={(e) => setStoredGroupId(e.target.value)}
-              className={selectClass}
-            >
-              {groups.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
+  const filtersSummary = `${settings.minDuration} min · ${
+    settings.lunchOnly
+      ? `obiad ${settings.lunchStart}:00–${settings.lunchEnd}:00`
+      : 'cały dzień'
+  }`
 
-          <div className="flex flex-wrap items-center gap-2">
-            <WeekNav weekStart={weekStart} onChange={setWeekStart} />
+  // Blok 1: kompaktowy panel (grupa, tydzień, osoby, filtry)
+  const controls = (
+    <section className="rounded-2xl bg-white p-3 shadow sm:p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={groupId}
+          onChange={(e) => setStoredGroupId(e.target.value)}
+          className={selectClass}
+          aria-label="Grupa"
+        >
+          {groups.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+
+        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+          <WeekNav weekStart={weekStart} onChange={setWeekStart} />
+          <button
+            onClick={refresh}
+            className={iconButtonClass}
+            aria-label="Odśwież plany"
+            title="Odśwież plany"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        {group.members.map((member) => {
+          const visible = !hidden.includes(member.userId)
+          const memberEvents = schedules[member.userId]
+          const noPlan = memberEvents?.length === 0
+          const masked = memberEvents?.some((event) => event.is_masked)
+
+          return (
             <button
-              onClick={refresh}
-              className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100"
-              aria-label="Odśwież plany"
-              title="Odśwież plany"
+              key={member.userId}
+              type="button"
+              onClick={() => toggleMember(member.userId)}
+              aria-pressed={visible}
+              title={
+                visible
+                  ? 'Ukryj tę osobę (nie liczy się do okienek)'
+                  : 'Pokaż tę osobę'
+              }
+              className={`flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${
+                visible
+                  ? 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                  : 'border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100'
+              }`}
             >
-              <RefreshCw className="h-4 w-4" />
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{
+                  backgroundColor: colorOf(member.userId),
+                  opacity: visible ? 1 : 0.35,
+                }}
+              />
+              <span className={`min-w-0 truncate ${visible ? '' : 'line-through'}`}>
+                {member.displayName}
+                {member.userId === userId && ' (Ty)'}
+              </span>
+              {noPlan && <span className="text-amber-600">brak planu</span>}
+              {masked && (
+                <span className="text-slate-400" title="Udostępnia tylko godziny">
+                  tylko godz.
+                </span>
+              )}
+              {visible ? (
+                <Eye className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+              ) : (
+                <EyeOff className="h-3.5 w-3.5 shrink-0" />
+              )}
             </button>
-          </div>
-        </div>
+          )
+        })}
 
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-slate-500">
-              Kliknij osobę, aby ukryć lub pokazać jej plan. Ukryte osoby nie są
-              brane pod uwagę przy szukaniu okienek.
-            </p>
-            <div className="flex gap-2">
-              <button type="button" onClick={showAll} className={quickButtonClass}>
-                <Eye className="h-4 w-4" />
-                Pokaż wszystkich
-              </button>
-              <button type="button" onClick={showOnlyMe} className={quickButtonClass}>
-                <User className="h-4 w-4" />
-                Tylko ja
-              </button>
-            </div>
-          </div>
+        <span className="mx-1 h-5 w-px bg-slate-200" />
 
-          <div className="flex flex-wrap gap-2">
-            {group.members.map((member) => {
-              const visible = !hidden.includes(member.userId)
-              const memberEvents = schedules[member.userId]
-              const noPlan = memberEvents?.length === 0
-              const masked = memberEvents?.some((event) => event.is_masked)
+        <button
+          type="button"
+          onClick={showAll}
+          className={iconButtonClass}
+          aria-label="Pokaż wszystkich"
+          title="Pokaż wszystkich"
+        >
+          <Eye className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={showOnlyMe}
+          className={iconButtonClass}
+          aria-label="Tylko ja"
+          title="Tylko ja"
+        >
+          <User className="h-4 w-4" />
+        </button>
+      </div>
 
-              return (
-                <button
-                  key={member.userId}
-                  type="button"
-                  onClick={() => toggleMember(member.userId)}
-                  aria-pressed={visible}
-                  title={visible ? 'Ukryj tę osobę' : 'Pokaż tę osobę'}
-                  className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
-                    visible
-                      ? 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
-                      : 'border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100'
-                  }`}
-                >
-                  <span
-                    className="h-3 w-3 rounded-full"
-                    style={{
-                      backgroundColor: colorOf(member.userId),
-                      opacity: visible ? 1 : 0.35,
-                    }}
-                  />
-                  <span className={visible ? '' : 'line-through'}>
-                    {member.displayName}
-                    {member.userId === userId && ' (Ty)'}
-                  </span>
-                  {noPlan && (
-                    <span className="text-xs text-amber-600">brak planu</span>
-                  )}
-                  {masked && (
-                    <span
-                      className="text-xs text-slate-400"
-                      title="Ta osoba udostępnia tylko godziny zajęć"
-                    >
-                      tylko godziny
-                    </span>
-                  )}
-                  {visible ? (
-                    <Eye className="h-4 w-4 text-slate-500" />
-                  ) : (
-                    <EyeOff className="h-4 w-4" />
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
+      <details className="mt-3 border-t border-slate-100 pt-2">
+        <summary className="flex cursor-pointer items-center justify-between gap-2 text-sm text-slate-600">
+          <span className="font-medium">Filtry okienek</span>
+          <span className="text-xs text-slate-400">{filtersSummary}</span>
+        </summary>
 
-        <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4 text-sm text-slate-600">
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
           <label className="flex items-center gap-2">
-            Minimalna długość okienka:
+            Minimalna długość:
             <select
               value={settings.minDuration}
               onChange={(e) => updateSettings({ minDuration: Number(e.target.value) })}
@@ -298,92 +317,116 @@ export default function OverlayView({ syncTick = 0 }) {
             Tylko pora obiadu ({settings.lunchStart}:00–{settings.lunchEnd}:00)
           </label>
         </div>
-      </section>
+      </details>
 
       {error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       )}
 
       {membersWithoutPlan.length > 0 && (
-        <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          Brak zaimportowanego planu:{' '}
-          {membersWithoutPlan.map((member) => member.displayName).join(', ')}.
-          Okienka mogą być zawyżone, dopóki ta osoba nie zaimportuje planu.
+          <span className="min-w-0">
+            Brak zaimportowanego planu:{' '}
+            {membersWithoutPlan.map((member) => member.displayName).join(', ')}.
+            Okienka mogą być zawyżone.
+          </span>
         </p>
       )}
+    </section>
+  )
 
-      <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
-        <h2 className="text-lg font-semibold text-slate-800">
-          Nałożone plany
-        </h2>
+  // Blok 2: legenda osób (osobno, żeby można ją było przestawić)
+  const legend =
+    settings.showLegend && layers.length > 1 ? <PlanLegend layers={layers} /> : null
+
+  // Blok 3: plan
+  const grid = (
+    <section className="rounded-2xl bg-white p-3 shadow sm:p-6">
+      <h2 className="text-lg font-semibold text-slate-800">Nałożone plany</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Kliknij kafelek, aby zobaczyć szczegóły. Zielone, przerywane pola to
+        wspólne okienka widocznych osób.
+      </p>
+
+      <div className="mt-4">
+        {loadingSchedules ? (
+          <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+        ) : layers.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            Wszyscy są ukryci. Pokaż co najmniej jedną osobę.
+          </p>
+        ) : (
+          <WeekGrid
+            layers={layers}
+            highlights={slots}
+            weekStart={weekStart}
+            hideLegend
+          />
+        )}
+      </div>
+    </section>
+  )
+
+  // Blok 4: lista wspólnych okienek
+  const slotsList = settings.hiddenPanels.includes('overlaySlots') ? null : (
+    <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+        <Utensils className="h-5 w-5 shrink-0 text-green-600" />
+        Wspólne okienka w tym tygodniu
+      </h2>
+
+      {layers.length > 0 && (
         <p className="mt-1 text-sm text-slate-500">
-          Kliknij kafelek, aby zobaczyć wszystkie informacje. Zielone,
-          przerywane pola to wspólne okienka widocznych osób.
+          Liczone dla: {layers.map((layer) => layer.watermark).join(', ')}.
         </p>
-
-        <div className="mt-4">
-          {loadingSchedules ? (
-            <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
-          ) : layers.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              Wszyscy są ukryci. Pokaż co najmniej jedną osobę.
-            </p>
-          ) : (
-            <WeekGrid layers={layers} highlights={slots} weekStart={weekStart} />
-          )}
-        </div>
-      </section>
-
-      {!settings.hiddenPanels.includes('overlaySlots') && (
-        <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-            <Utensils className="h-5 w-5 text-green-600" />
-            Wspólne okienka w tym tygodniu
-          </h2>
-
-          {layers.length > 0 && (
-            <p className="mt-1 text-sm text-slate-500">
-              Liczone dla: {layers.map((layer) => layer.watermark).join(', ')}.
-            </p>
-          )}
-
-          {loadingSchedules || layers.length === 0 ? null : slotsByDay.length ===
-            0 ? (
-            <p className="mt-3 text-sm text-slate-500">
-              Brak wspólnych okienek spełniających warunki. Spróbuj skrócić
-              minimalną długość, wyłączyć filtr pory obiadu albo ukryć kogoś z
-              ekipy.
-            </p>
-          ) : (
-            <ul className="mt-3 flex flex-col gap-3">
-              {slotsByDay.map(({ day, slots: daySlots }) => (
-                <li
-                  key={day}
-                  className="flex flex-wrap items-center gap-2 text-sm"
-                >
-                  <span className="w-40 font-medium text-slate-700">
-                    {DAY_NAMES[day]} {formatDayMonth(addDays(weekStart, day - 1))}
-                  </span>
-                  {daySlots.map((slot) => (
-                    <span
-                      key={`${slot.startMin}-${slot.endMin}`}
-                      className="rounded-full bg-green-100 px-3 py-1 font-medium text-green-800"
-                    >
-                      {minutesToTime(slot.startMin)}–{minutesToTime(slot.endMin)}{' '}
-                      <span className="font-normal text-green-600">
-                        ({slot.endMin - slot.startMin} min)
-                      </span>
-                    </span>
-                  ))}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
       )}
-    </div>
+
+      {loadingSchedules || layers.length === 0 ? null : slotsByDay.length === 0 ? (
+        <p className="mt-3 text-sm text-slate-500">
+          Brak wspólnych okienek spełniających warunki. Spróbuj skrócić minimalną
+          długość, wyłączyć filtr pory obiadu albo ukryć kogoś z ekipy.
+        </p>
+      ) : (
+        <ul className="mt-3 flex flex-col gap-3">
+          {slotsByDay.map(({ day, slots: daySlots }) => (
+            <li key={day} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="w-40 max-w-full font-medium text-slate-700">
+                {DAY_NAMES[day]} {formatDayMonth(addDays(weekStart, day - 1))}
+              </span>
+              {daySlots.map((slot) => (
+                <span
+                  key={`${slot.startMin}-${slot.endMin}`}
+                  className="rounded-full bg-green-100 px-3 py-1 font-medium text-green-800"
+                >
+                  {minutesToTime(slot.startMin)}–{minutesToTime(slot.endMin)}{' '}
+                  <span className="font-normal text-green-600">
+                    ({slot.endMin - slot.startMin} min)
+                  </span>
+                </span>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+
+  return (
+    <ReorderableList
+      id="overlay"
+      allIds={ALL_IDS}
+      order={order}
+      editing={editing}
+      onReorder={onReorder}
+      items={[
+        { id: 'controls', label: 'Ustawienia i osoby', node: controls },
+        { id: 'legend', label: 'Legenda osób', node: legend },
+        { id: 'grid', label: 'Plan', node: grid },
+        { id: 'slots', label: 'Lista wspólnych okienek', node: slotsList },
+      ]}
+    />
   )
 }

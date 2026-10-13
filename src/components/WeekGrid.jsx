@@ -48,6 +48,7 @@ function createMeasure(fontFamily) {
  * highlights:    [{ day, startMin, endMin }]  (opcjonalnie, np. wspólne okienka)
  * weekStart:     "RRRR-MM-DD" poniedziałku (daty w nagłówku, kropki sprawdzianów, linia "teraz")
  * mode:          'view' (domyślnie) albo 'picker' (kafelki z plusem do wyboru zajęć)
+ * hideLegend:    legenda osób jest pokazywana osobno (np. jako przesuwany blok)
  * onPick:        ({ event, date }) w trybie 'picker'
  * onLongPress:   ({ event, date }) po przytrzymaniu kafelka zajęć
  * onEditTest:    (testId) przycisk "Edytuj" w oknie sprawdzianu
@@ -60,6 +61,7 @@ export default function WeekGrid({
   highlights = [],
   weekStart,
   mode = 'view',
+  hideLegend = false,
   onPick,
   onLongPress,
   onEditTest,
@@ -300,7 +302,7 @@ export default function WeekGrid({
         event.tileColor ??
         ((layer.applySubjectStyles && subjectStyle?.color) || layer.color)
 
-      // Rodzaj zajęć: laboratoria są ciemniejsze, litera W / L / S / Z jako znak wodny
+      // Rodzaj zajęć: laboratoria są ciemniejsze, litera W / Ć / L / P / S / K / Z jako znak wodny
       const type = isClass(event) ? classifyEvent(event) : null
       const isLab = type?.kind === 'lab'
       if (settings.showTypeWatermark && type?.letters) hasTypes = true
@@ -506,7 +508,7 @@ export default function WeekGrid({
 
   return (
     <div className="flex flex-col gap-3">
-      {settings.showLegend && layers.length > 1 && (
+      {!hideLegend && settings.showLegend && layers.length > 1 && (
         <div className="flex flex-wrap gap-2">
           {layers.map((layer) => (
             <span
@@ -871,8 +873,8 @@ export default function WeekGrid({
 
       {hasTypes && (
         <p className="text-xs text-slate-500">
-          Litera na kafelku: W wykład, L laboratorium (ciemniejszy odcień), S
-          seminarium, Z zajęcia zdalne.
+          Litera na kafelku: W wykład, Ć ćwiczenia, L laboratorium (ciemniejszy
+          odcień), P projekt, S seminarium, K konwersatorium, Z zajęcia zdalne.
         </p>
       )}
 

@@ -1,0 +1,115 @@
+/* ===== Tryb edycji układu: przeciąganie bloków i zakładek ===== */
+
+.edit-block {
+  position: relative;
+  border-radius: 1rem;
+  outline: 2px dashed color-mix(in srgb, var(--accent-500) 50%, transparent);
+  outline-offset: 5px;
+}
+
+.edit-handle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--accent-500) 14%, transparent);
+  color: var(--accent-600);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: grab;
+  touch-action: none;
+  transition: background 0.2s ease;
+}
+
+.dark .edit-handle {
+  color: var(--accent-400);
+}
+
+.edit-handle:hover {
+  background: color-mix(in srgb, var(--accent-500) 24%, transparent);
+}
+
+.edit-handle:active {
+  cursor: grabbing;
+}
+
+.edit-empty {
+  margin-left: auto;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+/* Zawartość bloku w trybie edycji: zablokowana i delikatnie "drży" */
+.edit-content {
+  pointer-events: none;
+  user-select: none;
+  animation: edit-wiggle 0.42s ease-in-out infinite alternate;
+}
+
+.edit-block-dragging {
+  z-index: 50;
+  outline-style: solid;
+  filter: drop-shadow(0 22px 28px rgba(15, 23, 42, 0.32));
+}
+
+.edit-block-dragging .edit-handle {
+  cursor: grabbing;
+}
+
+.edit-block-dragging .edit-content {
+  animation: none;
+  transform: scale(1.015);
+  transition: transform 0.15s ease;
+}
+
+@keyframes edit-wiggle {
+  from {
+    transform: rotate(-0.16deg);
+  }
+  to {
+    transform: rotate(0.16deg);
+  }
+}
+
+/* Zakładki w trybie edycji */
+.edit-tab {
+  display: flex;
+  flex-shrink: 0;
+  margin: 3px 0;
+  padding: 0.35rem 0.9rem;
+  border: 2px dashed color-mix(in srgb, var(--accent-500) 55%, transparent);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--accent-500) 10%, transparent);
+  color: var(--accent-600);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dark .edit-tab {
+  color: var(--accent-400);
+}
+
+.edit-tab-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  animation: edit-wiggle 0.38s ease-in-out infinite alternate;
+}
+
+.edit-tab-dragging {
+  z-index: 50;
+  cursor: grabbing;
+  border-style: solid;
+  filter: drop-shadow(0 12px 14px rgba(15, 23, 42, 0.3));
+}
+
+.edit-tab-dragging .edit-tab-inner {
+  animation: none;
+}
