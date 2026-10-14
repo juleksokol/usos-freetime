@@ -30,15 +30,13 @@ import usePersistentState from '../hooks/usePersistentState'
 import useSwipeNavigation from '../hooks/useSwipeNavigation'
 import useTestReminders from '../hooks/useTestReminders'
 import CustomEvents from '../components/CustomEvents'
-import ExtraSettings from '../components/ExtraSettings'
 import GroupsPanel from '../components/GroupsPanel'
 import ImportSchedule from '../components/ImportSchedule'
 import OverlayView from '../components/OverlayView'
-import PlanSettings from '../components/PlanSettings'
 import QuickEventDialog from '../components/QuickEventDialog'
 import ReorderableList from '../components/ReorderableList'
 import SearchModal from '../components/SearchModal'
-import SettingsPanel from '../components/SettingsPanel'
+import SettingsTab from '../components/settings/SettingsTab'
 import TabBar from '../components/TabBar'
 import TestDialog from '../components/TestDialog'
 import TestsTab from '../components/TestsTab'
@@ -460,11 +458,7 @@ export default function Dashboard() {
             )}
 
             {tab === 'settings' && (
-              <>
-                <ExtraSettings />
-                <PlanSettings subjects={subjects} />
-                <SettingsPanel onDataChanged={loadEvents} />
-              </>
+              <SettingsTab subjects={subjects} onDataChanged={loadEvents} />
             )}
           </div>
         </main>

@@ -1,0 +1,23 @@
+/* Płynne rozwijanie i zwijanie sekcji ustawień (animacja wysokości) */
+.settings-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.settings-collapse[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+
+/* Zwinięta zawartość nie jest dostępna ani dla myszy, ani dla klawiatury */
+.settings-collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  transition: visibility 0s linear 0.3s;
+}
+
+.settings-collapse[data-open='true'] > .settings-collapse-inner {
+  visibility: visible;
+  transition-delay: 0s;
+}

@@ -1,20 +1,65 @@
+import { ChevronDown } from 'lucide-react'
+import './settings.css'
+
 export const selectClass =
   'max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
 
-export function Section({ icon: Icon, title, description, children }) {
+/**
+ * Zwijana sekcja ustawień.
+ * summary: krótkie podsumowanie widoczne w nagłówku (np. "Ciemny · Indygo")
+ */
+export function Section({ title, description, icon: Icon, summary, open, onToggle, children }) {
   return (
-    <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
-      <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-        {Icon && <Icon className="h-5 w-5 shrink-0 text-indigo-600" />}
-        {title}
-      </h2>
-      {description && (
-        <p className="mt-1 text-sm text-slate-500">{description}</p>
-      )}
-      <div className="mt-2 flex flex-col divide-y divide-slate-100">
-        {children}
+    <section className="overflow-hidden rounded-2xl bg-white shadow">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-slate-50 sm:px-6"
+      >
+        {Icon && (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+            <Icon className="h-5 w-5" />
+          </span>
+        )}
+
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold text-slate-800">{title}</span>
+          {description && (
+            <span className="block text-sm text-slate-500">{description}</span>
+          )}
+        </span>
+
+        {summary && (
+          <span className="hidden max-w-[40%] truncate rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 sm:block">
+            {summary}
+          </span>
+        )}
+
+        <ChevronDown
+          className={`h-5 w-5 shrink-0 text-slate-400 transition-transform duration-300 ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      <div className="settings-collapse" data-open={open}>
+        <div className="settings-collapse-inner">
+          <div className="flex flex-col divide-y divide-slate-100 border-t border-slate-100 px-4 pb-2 sm:px-6">
+            {children}
+          </div>
+        </div>
       </div>
     </section>
+  )
+}
+
+// Mały nagłówek wewnątrz sekcji
+export function SubHeading({ children }) {
+  return (
+    <p className="pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
+      {children}
+    </p>
   )
 }
 
