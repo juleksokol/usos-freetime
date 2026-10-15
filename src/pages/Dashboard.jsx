@@ -34,6 +34,7 @@ import GroupsPanel from '../components/GroupsPanel'
 import ImportSchedule from '../components/ImportSchedule'
 import OverlayView from '../components/OverlayView'
 import QuickEventDialog from '../components/QuickEventDialog'
+import QuickLinks from '../components/links/QuickLinks'
 import ReorderableList from '../components/ReorderableList'
 import SearchModal from '../components/SearchModal'
 import SettingsTab from '../components/settings/SettingsTab'
@@ -61,7 +62,7 @@ export default function Dashboard() {
   const { user, profile, signOut } = useAuth()
   const { settings, updateSettings, isDark } = useSettings()
 
-  // Tryb edycji układu (ołówek): przeciąganie bloków i zakładek
+  // Tryb edycji układu (ołówek): przeciąganie bloków, zakładek i szybkich linków
   const [editMode, setEditMode] = useState(false)
   const layoutOrder = settings.layoutOrder ?? {}
 
@@ -313,16 +314,21 @@ export default function Dashboard() {
     <TestsContext.Provider value={testsValue}>
       <div className="min-h-screen">
         <header className="app-header shadow-sm">
-          <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2">
+          <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2 md:shrink-0">
               <CalendarClock className="logo-icon h-6 w-6 shrink-0 text-indigo-600" />
               <span className="truncate text-lg font-bold text-slate-800">
                 USOS FreeTime
               </span>
             </div>
 
+            {/* Szybkie linki: pasek na komputerze, przycisk z szufladą na telefonie */}
+            <div className="flex min-w-0 flex-1 items-center">
+              <QuickLinks editing={editMode} />
+            </div>
+
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              <span className="hidden text-sm text-slate-600 md:inline">{name}</span>
+              <span className="hidden text-sm text-slate-600 lg:inline">{name}</span>
               <button
                 onClick={() => setEditMode((value) => !value)}
                 className={`flex items-center gap-1.5 rounded-lg border p-2 text-sm transition ${
@@ -369,8 +375,9 @@ export default function Dashboard() {
             <div className="modal-card mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-indigo-400 bg-indigo-50 px-4 py-3 text-sm text-slate-700">
               <p className="min-w-0 flex-1">
                 <strong className="text-indigo-600">Tryb edycji układu.</strong>{' '}
-                Przeciągaj bloki za uchwyt z nazwą oraz zakładki u góry. Układ
-                zapisuje się na koncie.
+                Przeciągaj bloki za uchwyt z nazwą, zakładki oraz przyciski
+                szybkich linków u góry (ołówek przy przycisku edytuje go, a plus
+                dodaje nowy). Układ zapisuje się na koncie.
               </p>
               <div className="flex gap-2">
                 <button
