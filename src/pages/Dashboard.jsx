@@ -14,6 +14,7 @@ import {
   Settings as SettingsIcon,
   Users,
 } from 'lucide-react'
+import { ActionsContext } from '../context/ActionsContext'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { TestsContext } from '../context/TestsContext'
@@ -25,6 +26,11 @@ import { fetchUserSchedule } from '../lib/scheduleService'
 import { fetchTests } from '../lib/testService'
 import { draftFromTile, testToDraft, testToEvent } from '../lib/tests'
 import { minutesToTime } from '../lib/timeUtils'
+import {
+  fetchVisibilityRules,
+  saveEventVisibility,
+  saveSubjectVisibility,
+} from '../lib/visibilityService'
 import useRealtimeSync from '../hooks/useRealtimeSync'
 import usePersistentState from '../hooks/usePersistentState'
 import useSwipeNavigation from '../hooks/useSwipeNavigation'
@@ -32,6 +38,7 @@ import useTestReminders from '../hooks/useTestReminders'
 import CustomEvents from '../components/CustomEvents'
 import GroupsPanel from '../components/GroupsPanel'
 import ImportSchedule from '../components/ImportSchedule'
+import OnboardingWizard from '../components/OnboardingWizard'
 import OverlayView from '../components/OverlayView'
 import QuickEventDialog from '../components/QuickEventDialog'
 import QuickLinks from '../components/links/QuickLinks'
@@ -103,15 +110,17 @@ export default function Dashboard() {
   const [weekStart, setWeekStart] = useState(defaultWeekStart)
   const [events, setEvents] = useState([])
   const [tests, setTests] = useState([])
+  const [rules, setRules] = useState({}) // reguły widoczności przedmiotów dla znajomych
   const [loadingEvents, setLoadingEvents] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [offlineNote, setOfflineNote] = useState('')
   const [syncTick, setSyncTick] = useState(0) // zmiana = widoki grup pobierają dane ponownie
 
-  // Okna: dodawanie/edycja sprawdzianu, szybkie wydarzenie z siatki, wyszukiwarka
+  // Okna: dodawanie/edycja sprawdzianu, szybkie wydarzenie z siatki, wyszukiwarka, kreator
   const [dialog, setDialog] = useState(null)
   const [quickDraft, setQuickDraft] = useState(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const [testsView, setTestsView] = useState('list')
 
   const name = profile?.display_name ?? user?.email
@@ -160,15 +169,26 @@ export default function Dashboard() {
     }
   }, [userId])
 
+  const loadRules = useCallback(async () => {
+    if (!userId) return
+    try {
+      setRules(await fetchVisibilityRules(userId))
+    } catch {
+      // tabela mogła jeszcze nie powstać (SQL z etapu E) albo brak połączenia
+    }
+  }, [userId])
+
   useEffect(() => {
     loadEvents()
     loadTests()
-  }, [loadEvents, loadTests])
+    loadRules()
+  }, [loadEvents, loadTests, loadRules])
 
   // Realtime: zmiany Twoich zajęć i składu grup oraz powrót do karty aplikacji
   useRealtimeSync(userId, () => {
     loadEvents()
     loadTests()
+    loadRules()
     setSyncTick((tick) => tick + 1)
   })
 
@@ -208,9 +228,53 @@ export default function Dashboard() {
     return () => clearTimeout(timer)
   }, [isDark])
 
+  // Kreator pierwszego uruchomienia: otwiera się raz, gdy konto nie ma jeszcze zajęć
+  // i kreator nie został ukończony (sprawdzamy też zapis na koncie, bo ustawienia
+  // z konta mogą dociągnąć się chwilę później niż profil)
+  const wizardCheckedRef = useRef(false)
+  useEffect(() => {
+    if (wizardCheckedRef.current || loadingEvents || loadError || offlineNote || !profile) return
+    wizardCheckedRef.current = true
+
+    const done =
+      settings.onboardingDone === true || profile.ui_settings?.onboardingDone === true
+    if (!done && events.length === 0) setWizardOpen(true)
+  }, [loadingEvents, loadError, offlineNote, profile, events.length, settings.onboardingDone])
+
+  const closeWizard = () => {
+    setWizardOpen(false)
+    updateSettings({ onboardingDone: true })
+  }
+
   // Sprawdziany jako kafelki do narysowania na planie
   const testEvents = useMemo(() => tests.map(testToEvent), [tests])
   const testsValue = useMemo(() => ({ tests }), [tests])
+
+  // Widoczność zajęć dla znajomych (okno szczegółów zajęć i ustawienia prywatności)
+  const setEventVisibility = useCallback(
+    async (eventId, value) => {
+      await saveEventVisibility(eventId, value)
+      await loadEvents()
+      setSyncTick((tick) => tick + 1)
+    },
+    [loadEvents]
+  )
+
+  const setSubjectVisibility = useCallback(
+    async (subject, value) => {
+      await saveSubjectVisibility(userId, subject, value)
+      await loadRules()
+      setSyncTick((tick) => tick + 1)
+    },
+    [userId, loadRules]
+  )
+
+  const openWizard = useCallback(() => setWizardOpen(true), [])
+
+  const actionsValue = useMemo(
+    () => ({ rules, setEventVisibility, setSubjectVisibility, openWizard }),
+    [rules, setEventVisibility, setSubjectVisibility, openWizard]
+  )
 
   // Lista przedmiotów (okno sprawdzianu i ustawienia kolorów)
   const subjects = useMemo(() => {
@@ -311,196 +375,207 @@ export default function Dashboard() {
   )
 
   return (
-    <TestsContext.Provider value={testsValue}>
-      <div className="min-h-screen">
-        <header className="app-header shadow-sm">
-          <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2 md:shrink-0">
-              <CalendarClock className="logo-icon h-6 w-6 shrink-0 text-indigo-600" />
-              <span className="truncate text-lg font-bold text-slate-800">
-                USOS FreeTime
-              </span>
-            </div>
+    <ActionsContext.Provider value={actionsValue}>
+      <TestsContext.Provider value={testsValue}>
+        <div className="min-h-screen">
+          <header className="app-header shadow-sm">
+            <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-2 md:shrink-0">
+                <CalendarClock className="logo-icon h-6 w-6 shrink-0 text-indigo-600" />
+                <span className="truncate text-lg font-bold text-slate-800">
+                  USOS FreeTime
+                </span>
+              </div>
 
-            {/* Szybkie linki: pasek na komputerze, przycisk z szufladą na telefonie */}
-            <div className="flex min-w-0 flex-1 items-center">
-              <QuickLinks editing={editMode} />
-            </div>
+              {/* Szybkie linki: pasek na komputerze, przycisk z szufladą na telefonie */}
+              <div className="flex min-w-0 flex-1 items-center">
+                <QuickLinks editing={editMode} />
+              </div>
 
-            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              <span className="hidden text-sm text-slate-600 lg:inline">{name}</span>
-              <button
-                onClick={() => setEditMode((value) => !value)}
-                className={`flex items-center gap-1.5 rounded-lg border p-2 text-sm transition ${
-                  editMode
-                    ? 'border-indigo-600 bg-indigo-600 text-white'
-                    : 'border-slate-300 text-slate-700 hover:bg-slate-100'
-                }`}
-                aria-label={editMode ? 'Zakończ edycję układu' : 'Edytuj układ'}
-                title={editMode ? 'Zakończ edycję układu' : 'Edytuj układ (przeciąganie bloków)'}
-              >
-                {editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-              </button>
-              <button
-                onClick={() => setSearchOpen(true)}
-                className="rounded-lg border border-slate-300 p-2 text-slate-700 transition hover:bg-slate-100"
-                aria-label="Szukaj"
-                title="Szukaj (Ctrl+K)"
-              >
-                <Search className="h-4 w-4" />
-              </button>
-              <ThemeToggle />
-              <button
-                onClick={signOut}
-                className="flex items-center gap-1.5 rounded-lg border border-slate-300 p-2 text-sm text-slate-700 transition hover:bg-slate-100 sm:px-3 sm:py-1.5"
-                aria-label="Wyloguj"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Wyloguj</span>
-              </button>
-            </div>
-          </div>
-
-          <TabBar
-            tabs={visibleTabs}
-            activeId={tab}
-            onSelect={selectTab}
-            editing={editMode}
-            onReorder={handleTabsReorder}
-          />
-        </header>
-
-        <main ref={mainRef} className="mx-auto max-w-5xl p-4 sm:p-6">
-          {editMode && (
-            <div className="modal-card mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-indigo-400 bg-indigo-50 px-4 py-3 text-sm text-slate-700">
-              <p className="min-w-0 flex-1">
-                <strong className="text-indigo-600">Tryb edycji układu.</strong>{' '}
-                Przeciągaj bloki za uchwyt z nazwą, zakładki oraz przyciski
-                szybkich linków u góry (ołówek przy przycisku edytuje go, a plus
-                dodaje nowy). Układ zapisuje się na koncie.
-              </p>
-              <div className="flex gap-2">
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <span className="hidden text-sm text-slate-600 lg:inline">{name}</span>
                 <button
-                  onClick={resetLayout}
-                  className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-slate-700 transition hover:bg-slate-100"
+                  onClick={() => setEditMode((value) => !value)}
+                  className={`flex items-center gap-1.5 rounded-lg border p-2 text-sm transition ${
+                    editMode
+                      ? 'border-indigo-600 bg-indigo-600 text-white'
+                      : 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                  }`}
+                  aria-label={editMode ? 'Zakończ edycję układu' : 'Edytuj układ'}
+                  title={editMode ? 'Zakończ edycję układu' : 'Edytuj układ (przeciąganie bloków)'}
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  Domyślny układ
+                  {editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
                 </button>
                 <button
-                  onClick={() => setEditMode(false)}
-                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 font-semibold text-white transition hover:bg-indigo-700"
+                  onClick={() => setSearchOpen(true)}
+                  className="rounded-lg border border-slate-300 p-2 text-slate-700 transition hover:bg-slate-100"
+                  aria-label="Szukaj"
+                  title="Szukaj (Ctrl+K)"
                 >
-                  <Check className="h-4 w-4" />
-                  Gotowe
+                  <Search className="h-4 w-4" />
+                </button>
+                <ThemeToggle />
+                <button
+                  onClick={signOut}
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-300 p-2 text-sm text-slate-700 transition hover:bg-slate-100 sm:px-3 sm:py-1.5"
+                  aria-label="Wyloguj"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline">Wyloguj</span>
                 </button>
               </div>
             </div>
+
+            <TabBar
+              tabs={visibleTabs}
+              activeId={tab}
+              onSelect={selectTab}
+              editing={editMode}
+              onReorder={handleTabsReorder}
+            />
+          </header>
+
+          <main ref={mainRef} className="mx-auto max-w-5xl p-4 sm:p-6">
+            {editMode && (
+              <div className="modal-card mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-indigo-400 bg-indigo-50 px-4 py-3 text-sm text-slate-700">
+                <p className="min-w-0 flex-1">
+                  <strong className="text-indigo-600">Tryb edycji układu.</strong>{' '}
+                  Przeciągaj bloki za uchwyt z nazwą, zakładki oraz przyciski
+                  szybkich linków u góry (ołówek przy przycisku edytuje go, a plus
+                  dodaje nowy). Układ zapisuje się na koncie.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={resetLayout}
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-slate-700 transition hover:bg-slate-100"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Domyślny układ
+                  </button>
+                  <button
+                    onClick={() => setEditMode(false)}
+                    className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 font-semibold text-white transition hover:bg-indigo-700"
+                  >
+                    <Check className="h-4 w-4" />
+                    Gotowe
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {offlineNote && (
+              <p className="mb-6 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                {offlineNote}
+              </p>
+            )}
+
+            <div key={tab} className="stagger flex flex-col gap-6">
+              {tab === 'today' && (
+                <TodayTab
+                  syncTick={syncTick}
+                  tests={tests}
+                  onOpenTest={openTest}
+                  editing={editMode}
+                  order={layoutOrder.today}
+                  onReorder={setOrder('today')}
+                />
+              )}
+
+              {tab === 'plan' && (
+                <ReorderableList
+                  id="plan"
+                  allIds={PLAN_IDS}
+                  order={layoutOrder.plan}
+                  editing={editMode}
+                  onReorder={setOrder('plan')}
+                  items={[
+                    { id: 'planGrid', label: 'Mój plan (siatka)', node: planGrid },
+                    {
+                      id: 'customEvents',
+                      label: 'Własne wydarzenia',
+                      node: showPanel('customEvents') ? (
+                        <CustomEvents events={events} onChanged={loadEvents} />
+                      ) : null,
+                    },
+                    {
+                      id: 'import',
+                      label: 'Import planu',
+                      node: showPanel('import') ? (
+                        <ImportSchedule onImported={loadEvents} existing={events} />
+                      ) : null,
+                    },
+                  ]}
+                />
+              )}
+
+              {tab === 'tests' && (
+                <TestsTab
+                  view={testsView}
+                  setView={setTestsView}
+                  tests={tests}
+                  events={events}
+                  onOpenDialog={openDialog}
+                />
+              )}
+
+              {tab === 'groups' && <GroupsPanel />}
+
+              {tab === 'overlay' && (
+                <OverlayView
+                  syncTick={syncTick}
+                  editing={editMode}
+                  order={layoutOrder.overlay}
+                  onReorder={setOrder('overlay')}
+                />
+              )}
+
+              {tab === 'settings' && (
+                <SettingsTab subjects={subjects} onDataChanged={loadEvents} />
+              )}
+            </div>
+          </main>
+
+          {dialog && (
+            <TestDialog
+              initial={dialog.draft}
+              subjects={subjects}
+              onClose={() => setDialog(null)}
+              onSaved={handleSaved}
+            />
           )}
 
-          {offlineNote && (
-            <p className="mb-6 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              {offlineNote}
-            </p>
+          {quickDraft && (
+            <QuickEventDialog
+              initial={quickDraft}
+              events={events}
+              onClose={() => setQuickDraft(null)}
+              onSaved={handleQuickSaved}
+            />
           )}
 
-          <div key={tab} className="stagger flex flex-col gap-6">
-            {tab === 'today' && (
-              <TodayTab
-                syncTick={syncTick}
-                tests={tests}
-                onOpenTest={openTest}
-                editing={editMode}
-                order={layoutOrder.today}
-                onReorder={setOrder('today')}
-              />
-            )}
+          {searchOpen && (
+            <SearchModal
+              events={events}
+              tests={tests}
+              onClose={() => setSearchOpen(false)}
+              onGoToDate={goToDate}
+              onOpenTest={(test) => {
+                setSearchOpen(false)
+                openTest(test)
+              }}
+            />
+          )}
 
-            {tab === 'plan' && (
-              <ReorderableList
-                id="plan"
-                allIds={PLAN_IDS}
-                order={layoutOrder.plan}
-                editing={editMode}
-                onReorder={setOrder('plan')}
-                items={[
-                  { id: 'planGrid', label: 'Mój plan (siatka)', node: planGrid },
-                  {
-                    id: 'customEvents',
-                    label: 'Własne wydarzenia',
-                    node: showPanel('customEvents') ? (
-                      <CustomEvents events={events} onChanged={loadEvents} />
-                    ) : null,
-                  },
-                  {
-                    id: 'import',
-                    label: 'Import planu',
-                    node: showPanel('import') ? (
-                      <ImportSchedule onImported={loadEvents} existing={events} />
-                    ) : null,
-                  },
-                ]}
-              />
-            )}
-
-            {tab === 'tests' && (
-              <TestsTab
-                view={testsView}
-                setView={setTestsView}
-                tests={tests}
-                events={events}
-                onOpenDialog={openDialog}
-              />
-            )}
-
-            {tab === 'groups' && <GroupsPanel />}
-
-            {tab === 'overlay' && (
-              <OverlayView
-                syncTick={syncTick}
-                editing={editMode}
-                order={layoutOrder.overlay}
-                onReorder={setOrder('overlay')}
-              />
-            )}
-
-            {tab === 'settings' && (
-              <SettingsTab subjects={subjects} onDataChanged={loadEvents} />
-            )}
-          </div>
-        </main>
-
-        {dialog && (
-          <TestDialog
-            initial={dialog.draft}
-            subjects={subjects}
-            onClose={() => setDialog(null)}
-            onSaved={handleSaved}
-          />
-        )}
-
-        {quickDraft && (
-          <QuickEventDialog
-            initial={quickDraft}
-            events={events}
-            onClose={() => setQuickDraft(null)}
-            onSaved={handleQuickSaved}
-          />
-        )}
-
-        {searchOpen && (
-          <SearchModal
-            events={events}
-            tests={tests}
-            onClose={() => setSearchOpen(false)}
-            onGoToDate={goToDate}
-            onOpenTest={(test) => {
-              setSearchOpen(false)
-              openTest(test)
-            }}
-          />
-        )}
-      </div>
-    </TestsContext.Provider>
+          {wizardOpen && (
+            <OnboardingWizard
+              events={events}
+              onImported={loadEvents}
+              onGroupsChanged={() => setSyncTick((tick) => tick + 1)}
+              onClose={closeWizard}
+            />
+          )}
+        </div>
+      </TestsContext.Provider>
+    </ActionsContext.Provider>
   )
 }

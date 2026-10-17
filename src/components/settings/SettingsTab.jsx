@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import usePersistentState from '../../hooks/usePersistentState'
 import { filterGroups } from '../../lib/settingsSearch'
+
 import {
   DangerBody,
   ExportBody,
@@ -10,6 +11,7 @@ import {
   ResetBody,
 } from './AccountBodies'
 import { LayoutExtras, NotificationsExtras } from './ExtraBodies'
+import { VisibilityRules, WizardRow } from './VisibilityBodies'
 import { Section } from './controls'
 import { SETTINGS_GROUPS } from './schema'
 import SettingRows from './SettingsRows'
@@ -27,12 +29,22 @@ function SectionBody({ section, subjects, onDataChanged }) {
       return <SubjectStyles subjects={subjects} />
     case 'profile':
       return <ProfileBody />
-    case 'privacy':
-      return <PrivacyBody />
+        case 'privacy':
+      return (
+        <>
+          <PrivacyBody />
+          <VisibilityRules />
+        </>
+      )
     case 'export':
       return <ExportBody />
-    case 'reset':
-      return <ResetBody />
+        case 'reset':
+      return (
+        <>
+          <WizardRow />
+          <ResetBody />
+        </>
+      )
     case 'danger':
       return <DangerBody onDataChanged={onDataChanged} />
     default:

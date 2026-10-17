@@ -25,7 +25,8 @@ export default function PrivacyPage() {
 
       <h2 className={h2}>Kto odpowiada za dane</h2>
       <p className={p}>
-        USOS FreeTime to prywatny projekt prowadzony przez Julian Sokół. Kontakt w sprawach danych: julek.sokol37@gmail.com.
+        USOS FreeTime to prywatny projekt prowadzony przez [imię i nazwisko lub
+        pseudonim]. Kontakt w sprawach danych: [adres e-mail].
       </p>
 
       <h2 className={h2}>Jakie dane przetwarzamy</h2>
@@ -34,7 +35,8 @@ export default function PrivacyPage() {
         <li className={li}>pseudonim wyświetlany znajomym,</li>
         <li className={li}>plan zajęć: nazwy przedmiotów, daty, godziny, sale i prowadzący,</li>
         <li className={li}>własne wydarzenia oraz sprawdziany wraz z notatkami i wynikami,</li>
-        <li className={li}>członkostwo w grupach oraz ustawienia interfejsu i prywatności,</li>
+        <li className={li}>członkostwo w grupach, ustawienia interfejsu i prywatności oraz Twoje decyzje, które zajęcia lub przedmioty pokazywać znajomym tylko jako „zajęty” albo ukryć,</li>
+        <li className={li}>adresy i nazwy własnych szybkich linków (zapisane w ustawieniach konta),</li>
         <li className={li}>dane techniczne o błędach aplikacji (bez danych osobowych), jeśli włączono monitorowanie błędów.</li>
       </ul>
 
@@ -50,7 +52,10 @@ export default function PrivacyPage() {
         <li className={li}>Ty widzisz wszystko, co zapisałeś.</li>
         <li className={li}>
           Osoby z Twoich grup widzą Twój plan: ze szczegółami albo tylko jako
-          „zajęty”, zależnie od ustawienia „Prywatność” w aplikacji.
+          „zajęty”, zależnie od ustawienia „Prywatność” w aplikacji. Pojedyncze
+          zajęcia lub cały przedmiot możesz pokazać znajomym tylko jako „zajęty”
+          albo ukryć. Ukryte zajęcia nie są wtedy widoczne dla znajomych, więc
+          dla nich jesteś w tym czasie wolny lub wolna.
         </li>
         <li className={li}>Sprawdziany, notatki, wyniki i ustawienia widzisz tylko Ty.</li>
       </ul>
@@ -59,7 +64,12 @@ export default function PrivacyPage() {
       <ul className={`${p} list-disc pl-5`}>
         <li className={li}>Supabase: baza danych i logowanie (region: [region bazy, np. Frankfurt]),</li>
         <li className={li}>Vercel: hosting aplikacji,</li>
-        <li className={li}>Sentry: raporty o błędach (opcjonalnie, bez danych osobowych).</li>
+        <li className={li}>Sentry: raporty o błędach (opcjonalnie, bez danych osobowych),</li>
+        <li className={li}>
+          Google (opcjonalnie): jeśli dla szybkiego linku wybierzesz ikonę strony,
+          Twoja przeglądarka pobierze ją z usługi Google, która dowie się nazwy
+          domeny tego linku (bez Twoich danych z aplikacji).
+        </li>
       </ul>
 
       <h2 className={h2}>Dane zapisane w Twojej przeglądarce</h2>

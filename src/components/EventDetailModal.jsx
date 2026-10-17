@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   CalendarDays,
   Clock,
+  Eye,
   FileText,
   GraduationCap,
   Lock,
@@ -12,9 +13,17 @@ import {
   Trophy,
   X,
 } from 'lucide-react'
+import { useActions } from '../context/ActionsContext'
+import { useAuth } from '../context/AuthContext'
 import { DAY_NAMES } from '../lib/constants'
 import { formatDate, formatLongDate } from '../lib/dateUtils'
 import { timeToMinutes } from '../lib/timeUtils'
+import {
+  VISIBILITY_OPTIONS,
+  describeFriendView,
+  effectiveVisibility,
+  friendView,
+} from '../lib/visibility'
 
 function recurrenceText(event) {
   if (event.event_date) return null
@@ -38,12 +47,129 @@ function Detail({ icon: Icon, children }) {
   )
 }
 
+// Widoczność własnych zajęć dla znajomych: ten termin albo wszystkie zajęcia przedmiotu
+function VisibilitySection({ event }) {
+  const { profile } = useAuth()
+  const { rules, setEventVisibility, setSubjectVisibility } = useActions()
+  const shareDetails = profile?.share_details ?? true
+
+  const [value, setValue] = useState(() => effectiveVisibility(event, rules))
+  const [scope, setScope] = useState('event') // 'event' | 'subject'
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+
+  const subjectRule = rules?.[event.title]
+
+  // Co zobaczy znajomy po zapisaniu
+  const preview =
+    scope === 'event'
+      ? friendView({ ...event, visibility: value }, rules, shareDetails)
+      : friendView(
+          { ...event, visibility: 'default' },
+          { ...rules, [event.title]: value === 'default' ? undefined : value },
+          shareDetails
+        )
+
+  const save = async () => {
+    setSaving(true)
+    setMessage('')
+
+    try {
+      if (scope === 'subject') {
+        await setSubjectVisibility(event.title, value)
+        if (event.visibility && event.visibility !== 'default') {
+          await setEventVisibility(event.id, 'default')
+        }
+      } else {
+        await setEventVisibility(event.id, value)
+      }
+      setMessage('Zapisano.')
+    } catch (err) {
+      setMessage(`Nie udało się zapisać: ${err.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="border-t border-slate-100 px-6 py-4">
+      <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+        <Eye className="h-4 w-4 text-slate-400" />
+        Widoczność dla znajomych
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {VISIBILITY_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setValue(option.value)}
+            className={`rounded-lg border px-3 py-1.5 text-sm transition ${
+              value === option.value
+                ? 'border-indigo-600 bg-indigo-600 text-white'
+                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-col gap-1.5 text-sm text-slate-700">
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="radio"
+            name={`visibility-scope-${event.id}`}
+            checked={scope === 'event'}
+            onChange={() => setScope('event')}
+            className="accent-indigo-600"
+          />
+          Tylko ten termin
+        </label>
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="radio"
+            name={`visibility-scope-${event.id}`}
+            checked={scope === 'subject'}
+            onChange={() => setScope('subject')}
+            className="mt-1 accent-indigo-600"
+          />
+          <span className="min-w-0">Wszystkie zajęcia: „{event.title}”</span>
+        </label>
+      </div>
+
+      <p className="mt-3 text-xs text-slate-500">{describeFriendView(preview)}</p>
+
+      {scope === 'event' && subjectRule && value === 'default' && (
+        <p className="mt-1 text-xs text-amber-700">
+          Ten przedmiot ma regułę, która nadal obowiązuje (
+          {subjectRule === 'hidden' ? 'ukryte' : 'tylko „Zajęty”'}).
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Zapisz widoczność
+        </button>
+        {message && <span className="text-xs text-slate-500">{message}</span>}
+      </div>
+    </div>
+  )
+}
+
 /**
  * detail: { event, color, ownerName, date }
  * onEditTest(testId): opcjonalnie, pokazuje przycisk "Edytuj" dla sprawdzianów
  */
 export default function EventDetailModal({ detail, onClose, onEditTest }) {
   const { event, color, ownerName, date } = detail
+  const { user } = useAuth()
+  const { setEventVisibility } = useActions()
 
   useEffect(() => {
     const handleKey = (e) => {
@@ -57,6 +183,10 @@ export default function EventDetailModal({ detail, onClose, onEditTest }) {
   const isCustom = event.source === 'custom'
   const isTest = event.source === 'test'
   const recurrence = recurrenceText(event)
+
+  // Widoczność ustawiasz tylko dla własnych zajęć i wydarzeń (nie sprawdzianów)
+  const canSetVisibility =
+    Boolean(setEventVisibility) && !isTest && Boolean(event.user_id) && event.user_id === user?.id
 
   return (
     <div
@@ -157,6 +287,8 @@ export default function EventDetailModal({ detail, onClose, onEditTest }) {
             </Detail>
           )}
         </ul>
+
+        {canSetVisibility && <VisibilitySection event={event} />}
 
         {isTest && onEditTest && (
           <div className="border-t border-slate-100 px-6 py-4">
