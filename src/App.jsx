@@ -4,12 +4,13 @@ import { Loader2 } from 'lucide-react'
 import { useAuth } from './context/AuthContext'
 import AuthForm from './components/AuthForm'
 import PrivacyPage from './components/PrivacyPage'
+import ForcePasswordChange from './components/password/ForcePasswordChange'
 import Dashboard from './pages/Dashboard'
 
 const PRIVACY_HASH = '#/prywatnosc'
 
 export default function App() {
-  const { session, loading } = useAuth()
+  const { session, loading, recovering, mustChangePassword } = useAuth()
   const [hash, setHash] = useState(window.location.hash)
 
   useEffect(() => {
@@ -33,10 +34,16 @@ export default function App() {
     )
   }
 
+  // Bez sesji albo w trakcie resetu hasła: logowanie. Słabe hasło: wymuszona zmiana.
+  let content
+  if (!session || recovering) content = <AuthForm />
+  else if (mustChangePassword) content = <ForcePasswordChange />
+  else content = <Dashboard />
+
   return (
     <>
-      {session ? <Dashboard /> : <AuthForm />}
-      <footer className="pb-6 pt-2 text-center text-xs text-slate-400">
+      {content}
+      <footer className="pb-6 pt-2 text-center text-xs text-slate-600">
         <a href={PRIVACY_HASH} className="underline-offset-2 hover:underline">
           Polityka prywatności
         </a>

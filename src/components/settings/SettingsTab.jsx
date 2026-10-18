@@ -16,6 +16,7 @@ import { Section } from './controls'
 import { SETTINGS_GROUPS } from './schema'
 import SettingRows from './SettingsRows'
 import SubjectStyles from './SubjectStyles'
+import PasswordBody from './PasswordBody'
 import { useSettings } from '../../context/SettingsContext'
 
 const ALL_SECTION_IDS = SETTINGS_GROUPS.flatMap((group) =>
@@ -29,6 +30,8 @@ function SectionBody({ section, subjects, onDataChanged }) {
       return <SubjectStyles subjects={subjects} />
     case 'profile':
       return <ProfileBody />
+    case 'password':
+      return <PasswordBody />
         case 'privacy':
       return (
         <>

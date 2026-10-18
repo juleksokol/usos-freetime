@@ -22,6 +22,7 @@ import { minutesToTime } from '../lib/timeUtils'
 import useGroups from '../hooks/useGroups'
 import usePersistentState from '../hooks/usePersistentState'
 import useSchedules from '../hooks/useSchedules'
+import useTestBusy from '../hooks/useTestBusy'
 import FreeNowWidget from './FreeNowWidget'
 import PushupCounter from './PushupCounter'
 import ReorderableList from './ReorderableList'
@@ -58,6 +59,7 @@ export default function TodayTab({
   const { settings } = useSettings()
   const userId = user?.id
   const myName = profile?.display_name ?? 'Ja'
+  const testBusy = useTestBusy()
 
   const { groups, loading: groupsLoading } = useGroups(syncTick)
   const [storedGroupId, setStoredGroupId] = usePersistentState(
@@ -109,7 +111,11 @@ export default function TodayTab({
   const slots =
     !busy && members.length > 0 && dayIncluded
       ? findCommonFreeSlots(
-          members.flatMap((member) => dayEvents(member.userId)),
+                    members.flatMap((member) =>
+            member.userId === testBusy.userId
+              ? [...dayEvents(member.userId), ...testBusy.onDate(date)]
+              : dayEvents(member.userId)
+          ),
           {
             dayStartMin: windowStart,
             dayEndMin: endMin,

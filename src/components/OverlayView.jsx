@@ -23,6 +23,7 @@ import { minutesToTime } from '../lib/timeUtils'
 import useGroups from '../hooks/useGroups'
 import usePersistentState from '../hooks/usePersistentState'
 import useSchedules from '../hooks/useSchedules'
+import useTestBusy from '../hooks/useTestBusy'
 import PlanLegend from './PlanLegend'
 import ReorderableList from './ReorderableList'
 import WeekGrid from './WeekGrid'
@@ -40,6 +41,7 @@ export default function OverlayView({ syncTick = 0, editing, order, onReorder })
   const { user } = useAuth()
   const { settings, updateSettings } = useSettings()
   const userId = user?.id
+  const testBusy = useTestBusy()
 
   const { groups, loading: groupsLoading, error: groupsError } = useGroups(syncTick)
   const [storedGroupId, setStoredGroupId] = usePersistentState(
@@ -143,10 +145,15 @@ export default function OverlayView({ syncTick = 0, editing, order, onReorder })
         dayEndMin: settings.gridEndHour * 60,
       }
 
+    // Twoje sprawdziany liczą się jako zajęty czas (widzisz je tylko Ty)
+  const myTestBusy = layers.some((layer) => layer.id === userId)
+    ? testBusy.forWeek(weekStart)
+    : []
+
   const slots =
     layers.length > 0
       ? findCommonFreeSlots(
-          layers.flatMap((layer) => layer.events),
+          [...layers.flatMap((layer) => layer.events), ...myTestBusy],
           { ...range, minDuration: settings.minDuration, days }
         )
       : []
@@ -380,7 +387,9 @@ export default function OverlayView({ syncTick = 0, editing, order, onReorder })
 
       {layers.length > 0 && (
         <p className="mt-1 text-sm text-slate-500">
-          Liczone dla: {layers.map((layer) => layer.watermark).join(', ')}.
+            Liczone dla: {layers.map((layer) => layer.watermark).join(', ')}.
+          {myTestBusy.length > 0 &&
+            ' Uwzględniam też Twoje sprawdziany z tego tygodnia.'}
         </p>
       )}
 

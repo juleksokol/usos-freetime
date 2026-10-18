@@ -9,7 +9,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
     'Brak zmiennych VITE_SUPABASE_URL lub VITE_SUPABASE_ANON_KEY w pliku .env.local'
   )
 }
-
+// Czy aplikację otwarto z linku resetu hasła (musimy to odczytać, zanim klient Supabase
+// usunie dane z adresu strony)
+export const openedFromRecoveryLink =
+  typeof window !== 'undefined' && /[#&]type=recovery(&|$)/.test(window.location.hash)
 // Magazyn sesji zależny od wyboru "Zapamiętaj mnie"
 const authStorage = {
   getItem: (key) => activeStorage().getItem(key),

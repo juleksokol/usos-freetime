@@ -9,6 +9,7 @@ import { minutesToTime } from '../lib/timeUtils'
 import useGroups from '../hooks/useGroups'
 import usePersistentState from '../hooks/usePersistentState'
 import useSchedules from '../hooks/useSchedules'
+import useTestBusy from '../hooks/useTestBusy'
 
 function currentMinutes() {
   const now = new Date()
@@ -43,8 +44,8 @@ export default function FreeNowWidget({ syncTick = 0 }) {
   }, [group])
 
   const memberIds = useMemo(() => members.map((member) => member.userId), [members])
-  const { schedules, loading } = useSchedules(memberIds, syncTick)
-
+   const { schedules, loading } = useSchedules(memberIds, syncTick)
+  const testBusy = useTestBusy()
   if (groupsLoading || !group || members.length === 0) return null
 
   const today = todayISO()
@@ -58,7 +59,11 @@ export default function FreeNowWidget({ syncTick = 0 }) {
         palette.length
     ]
 
-  const dayEventsOf = (memberId) => eventsOnDate(schedules[memberId] ?? [], today)
+    // Twoje sprawdziany liczą się jako zajęty czas (widzisz je tylko Ty)
+  const dayEventsOf = (memberId) => [
+    ...eventsOnDate(schedules[memberId] ?? [], today),
+    ...(memberId === testBusy.userId ? testBusy.onDate(today) : []),
+  ]
 
   const statuses = members
     .map((member) => ({ member, ...memberStatus(dayEventsOf(member.userId), nowMin) }))

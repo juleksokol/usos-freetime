@@ -34,12 +34,14 @@ export const DEFAULT_SETTINGS = {
   startTab: 'last', // 'last' albo id zakładki
   hiddenTabs: [],
   hiddenPanels: [],
+  showQuickLinks: true, // pasek szybkich linków w nagłówku
 
   // Wspólne okienka
   minDuration: 45,
   lunchOnly: false,
   lunchStart: 11,
   lunchEnd: 16,
+  testsCountAsBusy: true, // moje sprawdziany liczą się jako zajęty czas w okienkach
 
   // Licznik pompek
   pushupsStartDate: '2026-10-04',

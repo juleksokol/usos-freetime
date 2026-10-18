@@ -232,7 +232,7 @@ function Sheet({ links, manage, canAdd, onToggleManage, onClose, onEdit, onAdd, 
  *
  * editing: tryb edycji układu (ołówek w nagłówku): przeciąganie, edycja i dodawanie
  */
-export default function QuickLinks({ editing }) {
+function QuickLinksBar({ editing }) {
   const { settings, updateSettings } = useSettings()
   const links = settings.quickLinks ?? []
 
@@ -342,4 +342,13 @@ export default function QuickLinks({ editing }) {
       )}
     </>
   )
+}
+
+// Pasek można ukryć w Ustawieniach (zapisane linki zostają)
+export default function QuickLinks(props) {
+  const { settings } = useSettings()
+
+  if (settings.showQuickLinks === false) return null
+
+  return <QuickLinksBar {...props} />
 }
