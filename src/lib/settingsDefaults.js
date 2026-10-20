@@ -34,6 +34,9 @@ export const DEFAULT_SETTINGS = {
   startTab: 'last', // 'last' albo id zakładki
   hiddenTabs: [],
   hiddenPanels: [],
+  highContrast: false, // tryb wysokiego kontrastu
+  largeTargets: false, // większe elementy do klikania (min. 44 px)
+  textSpacing: false, // większe odstępy w tekście
   showQuickLinks: true, // pasek szybkich linków w nagłówku
 
   // Wspólne okienka

@@ -60,6 +60,7 @@ export default function SearchModal({ events, tests, onClose, onGoToDate, onOpen
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            aria-label="Szukaj przedmiotu, prowadzącego lub sali"
             placeholder="Szukaj przedmiotu, prowadzącego, sali…"
             className="min-w-0 flex-1 bg-transparent text-base text-slate-800 placeholder-slate-400 outline-none"
           />

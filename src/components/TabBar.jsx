@@ -15,6 +15,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { useI18n } from '../context/I18nContext'
 import { useSettings } from '../context/SettingsContext'
 import '../edit.css'
 
@@ -22,7 +23,8 @@ import '../edit.css'
 function SortableTab({ tab }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: tab.id })
-  const Icon = tab.icon
+    const Icon = tab.icon
+  const { t } = useI18n()
 
   return (
     <button
@@ -32,7 +34,7 @@ function SortableTab({ tab }) {
       {...attributes}
       {...listeners}
       className={`edit-tab ${isDragging ? 'edit-tab-dragging' : ''}`}
-      aria-label={`Przesuń zakładkę: ${tab.label}`}
+      aria-label={t('tabs.moveTab', { label: tab.label })}
     >
       <span className="edit-tab-inner">
         <Icon className="h-4 w-4" />
@@ -49,6 +51,7 @@ function SortableTab({ tab }) {
  */
 export default function TabBar({ tabs, activeId, onSelect, editing, onReorder }) {
   const { settings } = useSettings()
+  const { t } = useI18n()
   const tabRefs = useRef({})
   const [indicator, setIndicator] = useState({ left: 0, width: 0 })
 
@@ -87,7 +90,10 @@ export default function TabBar({ tabs, activeId, onSelect, editing, onReorder })
   }
 
   return (
-    <nav className="relative mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4">
+        <nav
+            aria-label={t('tabs.navLabel')}
+      className="relative mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4"
+    >
       {editing ? (
         <DndContext
           id="tabs"
@@ -109,7 +115,8 @@ export default function TabBar({ tabs, activeId, onSelect, editing, onReorder })
               ref={(element) => {
                 tabRefs.current[id] = element
               }}
-              onClick={() => onSelect(id)}
+                            onClick={() => onSelect(id)}
+              aria-current={activeId === id ? 'page' : undefined}
               className={`flex shrink-0 items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
                 activeId === id
                   ? 'text-indigo-600'
@@ -122,6 +129,7 @@ export default function TabBar({ tabs, activeId, onSelect, editing, onReorder })
           ))}
           <span
             className="tab-indicator"
+            aria-hidden="true"
             style={{ left: indicator.left, width: indicator.width }}
           />
         </>

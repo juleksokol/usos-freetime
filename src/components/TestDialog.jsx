@@ -183,6 +183,7 @@ export default function TestDialog({ initial, subjects, onClose, onSaved }) {
               type="text"
               value={form.subject}
               onChange={set('subject')}
+              aria-label="Nazwa przedmiotu"
               placeholder="Nazwa przedmiotu"
               maxLength={120}
               className={inputClass}

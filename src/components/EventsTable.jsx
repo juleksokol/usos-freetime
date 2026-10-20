@@ -29,6 +29,7 @@ export default function EventsTable({ events }) {
   return (
     <div className="max-h-96 overflow-auto rounded-lg border border-slate-200">
       <table className="min-w-full text-left text-sm">
+        <caption className="sr-only">Lista zajęć</caption>
         <thead className="sticky top-0 bg-slate-50 text-slate-600">
           <tr>
             <th className="px-3 py-2 font-medium">Dzień</th>

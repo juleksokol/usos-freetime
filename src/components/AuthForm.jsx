@@ -1,20 +1,45 @@
 import { useEffect, useId, useState } from 'react'
 import { CalendarClock, KeyRound, Loader2, LogIn, Mail, User, UserPlus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useI18n } from '../context/I18nContext'
 import { authErrorText } from '../lib/authErrors'
 import { isPasswordValid } from '../lib/passwordPolicy'
 import { getRememberPreference } from '../lib/session'
+import LanguageSwitch from './LanguageSwitch'
 import PasswordChecklist from './password/PasswordChecklist'
 import PasswordField from './password/PasswordField'
 
 const RESEND_SECONDS = 60
 
-const TITLES = {
-  login: 'Zaloguj się',
-  register: 'Załóż konto',
-  forgot: 'Reset hasła',
-  code: 'Wpisz kod z e-maila',
-  newpass: 'Ustaw nowe hasło',
+const TITLE_KEYS = {
+  login: 'auth.title.login',
+  register: 'auth.title.register',
+  forgot: 'auth.title.forgot',
+  code: 'auth.title.code',
+  newpass: 'auth.title.newpass',
+}
+
+const SUBTITLE_KEYS = {
+  login: 'auth.subtitle.login',
+  register: 'auth.subtitle.register',
+  forgot: 'auth.subtitle.forgot',
+  newpass: 'auth.subtitle.newpass',
+}
+
+const SUBMIT_KEYS = {
+  login: 'auth.submit.login',
+  register: 'auth.submit.register',
+  forgot: 'auth.submit.forgot',
+  code: 'auth.submit.code',
+  newpass: 'auth.submit.newpass',
+}
+
+const SUBMIT_ICONS = {
+  login: LogIn,
+  register: UserPlus,
+  forgot: Mail,
+  code: KeyRound,
+  newpass: KeyRound,
 }
 
 const inputClass =
@@ -76,6 +101,7 @@ export default function AuthForm() {
     completePasswordReset,
     cancelPasswordReset,
   } = useAuth()
+  const { t } = useI18n()
   const checklistId = useId()
 
   // 'login' | 'register' | 'forgot' | 'code' | 'newpass'
@@ -109,7 +135,7 @@ export default function AuthForm() {
   const sendCode = async () => {
     const { error: sendError } = await requestPasswordReset(email)
     if (sendError) {
-      setError(authErrorText(sendError, 'reset'))
+      setError(authErrorText(sendError, 'reset', t))
       return false
     }
 
@@ -119,72 +145,68 @@ export default function AuthForm() {
 
   const doLogin = async () => {
     const { error: signInError } = await signIn(email.trim(), password, remember)
-    if (signInError) setError(authErrorText(signInError, 'login'))
+    if (signInError) setError(authErrorText(signInError, 'login', t))
   }
 
   const doRegister = async () => {
     const name = displayName.trim()
     if (!name) {
-      setError('Podaj imię lub pseudonim, który zobaczą znajomi.')
+      setError(t('auth.err.nameRequired'))
       return
     }
     if (!isPasswordValid(password, { email })) {
-      setError('Hasło nie spełnia wszystkich wymagań z listy.')
+      setError(t('auth.err.passwordRules'))
       return
     }
     if (password !== confirm) {
-      setError('Hasło i jego powtórzenie nie są takie same.')
+      setError(t('auth.err.passwordMismatch'))
       return
     }
 
     const { data, error: signUpError } = await signUp(email.trim(), password, name, remember)
     if (signUpError) {
-      setError(authErrorText(signUpError, 'register'))
+      setError(authErrorText(signUpError, 'register', t))
       return
     }
 
     // Gdy w Supabase włączone jest potwierdzanie e-mail, sesja jest pusta
     if (!data.session) {
       go('login')
-      setInfo(
-        'Konto utworzone. Sprawdź skrzynkę e-mail i potwierdź adres, a następnie zaloguj się.'
-      )
+      setInfo(t('auth.info.registered'))
     }
   }
 
   const doRequestCode = async () => {
     if (await sendCode()) {
       go('code')
-      setInfo(
-        `Jeśli konto ${email.trim()} istnieje, wysłaliśmy na ten adres kod. Wpisz go poniżej.`
-      )
+      setInfo(t('auth.info.codeSent', { email: email.trim() }))
     }
   }
 
   const doVerifyCode = async () => {
     const { error: verifyError } = await verifyResetCode(email, code)
     if (verifyError) {
-      setError(authErrorText(verifyError, 'reset'))
+      setError(authErrorText(verifyError, 'reset', t))
       return
     }
 
     go('newpass')
-    setInfo('Kod jest poprawny. Ustaw nowe hasło.')
+    setInfo(t('auth.info.codeOk'))
   }
 
   const doNewPassword = async () => {
     if (!isPasswordValid(password, { email })) {
-      setError('Hasło nie spełnia wszystkich wymagań z listy.')
+      setError(t('auth.err.passwordRules'))
       return
     }
     if (password !== confirm) {
-      setError('Hasło i jego powtórzenie nie są takie same.')
+      setError(t('auth.err.passwordMismatch'))
       return
     }
 
     // Po sukcesie AuthProvider kończy reset i aplikacja otwiera się sama
     const { error: resetError } = await completePasswordReset(password)
-    if (resetError) setError(authErrorText(resetError, 'reset'))
+    if (resetError) setError(authErrorText(resetError, 'reset', t))
   }
 
   const handleSubmit = async (e) => {
@@ -210,7 +232,7 @@ export default function AuthForm() {
     setSubmitting(true)
 
     try {
-      if (await sendCode()) setInfo('Wysłaliśmy nowy kod.')
+      if (await sendCode()) setInfo(t('auth.resent'))
     } finally {
       setSubmitting(false)
     }
@@ -221,42 +243,37 @@ export default function AuthForm() {
     go('login')
   }
 
-  const SubmitIcon = { login: LogIn, register: UserPlus, forgot: Mail, code: KeyRound, newpass: KeyRound }[
-    mode
-  ]
-  const submitLabel = {
-    login: 'Zaloguj się',
-    register: 'Załóż konto',
-    forgot: 'Wyślij kod',
-    code: 'Sprawdź kod',
-    newpass: 'Zapisz nowe hasło',
-  }[mode]
+  const SubmitIcon = SUBMIT_ICONS[mode]
+  const trimmedEmail = email.trim()
 
-  const subtitle = {
-    login: 'Nałóż plany zajęć ze znajomymi i znajdź wspólne okienko na obiad.',
-    register: 'Nałóż plany zajęć ze znajomymi i znajdź wspólne okienko na obiad.',
-    forgot: 'Podaj adres e-mail konta. Wyślemy na niego kod do ustawienia nowego hasła.',
-    code: `Wpisz kod z wiadomości wysłanej na adres ${email.trim() || 'konta'}.`,
-    newpass: 'Wybierz nowe hasło do konta.',
-  }[mode]
+  const subtitle =
+    mode === 'code'
+      ? trimmedEmail
+        ? t('auth.subtitle.code', { email: trimmedEmail })
+        : t('auth.subtitle.codeNoEmail')
+      : t(SUBTITLE_KEYS[mode])
 
   const showRemember = mode === 'login' || mode === 'register'
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg sm:p-8">
+        <div className="mb-2 flex justify-end">
+          <LanguageSwitch />
+        </div>
+
         <div className="mb-6 flex flex-col items-center gap-2">
           <CalendarClock className="h-12 w-12 text-indigo-600" aria-hidden="true" />
           <h1 className="text-2xl font-bold text-slate-800">USOS FreeTime</h1>
         </div>
 
-        <h2 className="text-lg font-semibold text-slate-800">{TITLES[mode]}</h2>
+        <h2 className="text-lg font-semibold text-slate-800">{t(TITLE_KEYS[mode])}</h2>
         <p className="mb-5 mt-1 text-sm text-slate-600">{subtitle}</p>
 
         <form key={mode} onSubmit={handleSubmit} className="flex flex-col gap-4">
           {mode === 'register' && (
             <TextField
-              label="Imię lub pseudonim"
+              label={t('auth.field.name')}
               icon={User}
               value={displayName}
               onChange={setDisplayName}
@@ -267,7 +284,7 @@ export default function AuthForm() {
 
           {(mode === 'login' || mode === 'register' || mode === 'forgot') && (
             <TextField
-              label="Adres e-mail"
+              label={t('auth.field.email')}
               icon={Mail}
               type="email"
               value={email}
@@ -279,7 +296,7 @@ export default function AuthForm() {
 
           {mode === 'code' && (
             <TextField
-              label="Kod z e-maila"
+              label={t('auth.field.code')}
               icon={KeyRound}
               value={code}
               onChange={(value) => setCode(value.replace(/\D/g, ''))}
@@ -293,7 +310,7 @@ export default function AuthForm() {
 
           {(mode === 'login' || mode === 'register' || mode === 'newpass') && (
             <PasswordField
-              label={mode === 'newpass' ? 'Nowe hasło' : 'Hasło'}
+              label={mode === 'newpass' ? t('auth.field.newPassword') : t('auth.field.password')}
               value={password}
               onChange={setPassword}
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
@@ -305,7 +322,7 @@ export default function AuthForm() {
           {(mode === 'register' || mode === 'newpass') && (
             <>
               <PasswordField
-                label="Powtórz hasło"
+                label={t('auth.field.confirm')}
                 value={confirm}
                 onChange={setConfirm}
                 autoComplete="new-password"
@@ -324,10 +341,8 @@ export default function AuthForm() {
                 className="mt-0.5 h-4 w-4 shrink-0 accent-indigo-600"
               />
               <span>
-                Zapamiętaj mnie
-                <span className="block text-xs text-slate-600">
-                  Odznacz na cudzym urządzeniu: wylogujemy Cię po zamknięciu przeglądarki.
-                </span>
+                {t('auth.remember')}
+                <span className="block text-xs text-slate-600">{t('auth.rememberHint')}</span>
               </span>
             </label>
           )}
@@ -353,7 +368,7 @@ export default function AuthForm() {
             ) : (
               <SubmitIcon className="h-5 w-5" aria-hidden="true" />
             )}
-            {submitLabel}
+            {t(SUBMIT_KEYS[mode])}
           </button>
 
           {mode === 'code' && (
@@ -363,7 +378,7 @@ export default function AuthForm() {
               disabled={submitting || cooldown > 0}
               className={`${linkClass} self-start disabled:cursor-not-allowed disabled:text-slate-500 disabled:no-underline`}
             >
-              {cooldown > 0 ? `Wyślij kod ponownie za ${cooldown} s` : 'Wyślij kod ponownie'}
+              {cooldown > 0 ? t('auth.resendIn', { seconds: cooldown }) : t('auth.resend')}
             </button>
           )}
         </form>
@@ -372,26 +387,26 @@ export default function AuthForm() {
           {mode === 'login' && (
             <>
               <button type="button" onClick={() => go('forgot')} className={linkClass}>
-                Nie pamiętasz hasła?
+                {t('auth.link.forgot')}
               </button>
               <button type="button" onClick={() => go('register')} className={linkClass}>
-                Nie masz konta? Zarejestruj się
+                {t('auth.link.register')}
               </button>
             </>
           )}
           {mode === 'register' && (
             <button type="button" onClick={() => go('login')} className={linkClass}>
-              Masz już konto? Zaloguj się
+              {t('auth.link.login')}
             </button>
           )}
           {(mode === 'forgot' || mode === 'code') && (
             <button type="button" onClick={() => go('login')} className={linkClass}>
-              Wróć do logowania
+              {t('auth.link.back')}
             </button>
           )}
           {mode === 'newpass' && (
             <button type="button" onClick={cancelReset} className={linkClass}>
-              Anuluj
+              {t('auth.link.cancel')}
             </button>
           )}
         </div>

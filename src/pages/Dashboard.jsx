@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { ActionsContext } from '../context/ActionsContext'
 import { useAuth } from '../context/AuthContext'
+import { useI18n } from '../context/I18nContext'
 import { useSettings } from '../context/SettingsContext'
 import { TestsContext } from '../context/TestsContext'
 import { mergeVisibleOrder, resolveOrder } from '../lib/blockOrder'
@@ -25,6 +26,7 @@ import { loadCache, saveCache } from '../lib/offlineCache'
 import { fetchUserSchedule } from '../lib/scheduleService'
 import { fetchTests } from '../lib/testService'
 import { draftFromTile, testToDraft, testToEvent } from '../lib/tests'
+import { announce } from '../lib/announce'
 import { minutesToTime } from '../lib/timeUtils'
 import {
   fetchVisibilityRules,
@@ -38,6 +40,7 @@ import useTestReminders from '../hooks/useTestReminders'
 import CustomEvents from '../components/CustomEvents'
 import GroupsPanel from '../components/GroupsPanel'
 import ImportSchedule from '../components/ImportSchedule'
+import LanguageSwitch from '../components/LanguageSwitch'
 import OnboardingWizard from '../components/OnboardingWizard'
 import OverlayView from '../components/OverlayView'
 import QuickEventDialog from '../components/QuickEventDialog'
@@ -54,12 +57,12 @@ import WeekGrid from '../components/WeekGrid'
 import WeekNav from '../components/WeekNav'
 
 const TABS = [
-  { id: 'today', label: 'Dziś', icon: CalendarCheck },
-  { id: 'plan', label: 'Mój plan', icon: CalendarDays },
-  { id: 'tests', label: 'Kolokwia', icon: ClipboardList },
-  { id: 'groups', label: 'Grupy', icon: Users },
-  { id: 'overlay', label: 'Wspólne okienka', icon: Layers },
-  { id: 'settings', label: 'Ustawienia', icon: SettingsIcon },
+  { id: 'today', labelKey: 'tabs.today', icon: CalendarCheck },
+  { id: 'plan', labelKey: 'tabs.plan', icon: CalendarDays },
+  { id: 'tests', labelKey: 'tabs.tests', icon: ClipboardList },
+  { id: 'groups', labelKey: 'tabs.groups', icon: Users },
+  { id: 'overlay', labelKey: 'tabs.overlay', icon: Layers },
+  { id: 'settings', labelKey: 'tabs.settings', icon: SettingsIcon },
 ]
 
 const ALL_TAB_IDS = TABS.map((item) => item.id)
@@ -68,6 +71,7 @@ const PLAN_IDS = ['planGrid', 'customEvents', 'import']
 export default function Dashboard() {
   const { user, profile, signOut } = useAuth()
   const { settings, updateSettings, isDark } = useSettings()
+  const { t, locale } = useI18n()
 
   // Tryb edycji układu (ołówek): przeciąganie bloków, zakładek i szybkich linków
   const [editMode, setEditMode] = useState(false)
@@ -77,7 +81,7 @@ export default function Dashboard() {
     updateSettings({ layoutOrder: { ...layoutOrder, [key]: newOrder } })
 
   const resetLayout = () => {
-    if (!window.confirm('Przywrócić domyślny układ bloków i zakładek?')) return
+    if (!window.confirm(t('edit.resetConfirm'))) return
     updateSettings({ layoutOrder: {} })
   }
 
@@ -87,11 +91,12 @@ export default function Dashboard() {
     settings.startTab === 'last' ? lastTab : settings.startTab
   )
 
-  // Zakładki w zapisanej kolejności, bez ukrytych
+  // Zakładki w zapisanej kolejności, bez ukrytych, z nazwami w języku interfejsu
   const tabOrder = resolveOrder(layoutOrder.tabs, ALL_TAB_IDS)
   const visibleTabs = tabOrder
     .map((id) => TABS.find((item) => item.id === id))
     .filter((item) => item.id === 'settings' || !settings.hiddenTabs.includes(item.id))
+    .map((item) => ({ ...item, label: t(item.labelKey) }))
 
   const tab = visibleTabs.some((item) => item.id === sessionTab)
     ? sessionTab
@@ -107,13 +112,24 @@ export default function Dashboard() {
 
   const showPanel = (id) => !settings.hiddenPanels.includes(id)
 
+  // Tytuł strony i komunikat dla czytników ekranu po zmianie zakładki
+  const announcedTabRef = useRef(null)
+  useEffect(() => {
+    const label = t(TABS.find((item) => item.id === tab)?.labelKey ?? 'tabs.today')
+    document.title = `${label} · USOS FreeTime`
+    if (announcedTabRef.current !== null && announcedTabRef.current !== tab) {
+      announce(t('tabs.announce', { label }))
+    }
+    announcedTabRef.current = tab
+  }, [tab, t])
+
   const [weekStart, setWeekStart] = useState(defaultWeekStart)
   const [events, setEvents] = useState([])
   const [tests, setTests] = useState([])
   const [rules, setRules] = useState({}) // reguły widoczności przedmiotów dla znajomych
   const [loadingEvents, setLoadingEvents] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [offlineNote, setOfflineNote] = useState('')
+  const [offlineNote, setOfflineNote] = useState('') // czas zapisu planu pokazywanego offline
   const [syncTick, setSyncTick] = useState(0) // zmiana = widoki grup pobierają dane ponownie
 
   // Okna: dodawanie/edycja sprawdzianu, szybkie wydarzenie z siatki, wyszukiwarka, kreator
@@ -144,11 +160,7 @@ export default function Dashboard() {
       if (cached) {
         setEvents(cached.data)
         setLoadError('')
-        setOfflineNote(
-          `Brak połączenia z serwerem. Pokazuję plan zapisany ${new Date(
-            cached.savedAt
-          ).toLocaleString('pl-PL')}.`
-        )
+        setOfflineNote(cached.savedAt)
       } else {
         setLoadError(`Nie udało się pobrać planu: ${err.message}`)
       }
@@ -381,7 +393,10 @@ export default function Dashboard() {
           <header className="app-header shadow-sm">
             <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
               <div className="flex min-w-0 items-center gap-2 md:shrink-0">
-                <CalendarClock className="logo-icon h-6 w-6 shrink-0 text-indigo-600" />
+                <CalendarClock
+                  className="logo-icon h-6 w-6 shrink-0 text-indigo-600"
+                  aria-hidden="true"
+                />
                 <span className="truncate text-lg font-bold text-slate-800">
                   USOS FreeTime
                 </span>
@@ -394,6 +409,7 @@ export default function Dashboard() {
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                 <span className="hidden text-sm text-slate-600 lg:inline">{name}</span>
+                <LanguageSwitch className="hidden sm:inline-flex" />
                 <button
                   onClick={() => setEditMode((value) => !value)}
                   className={`flex items-center gap-1.5 rounded-lg border p-2 text-sm transition ${
@@ -401,27 +417,31 @@ export default function Dashboard() {
                       ? 'border-indigo-600 bg-indigo-600 text-white'
                       : 'border-slate-300 text-slate-700 hover:bg-slate-100'
                   }`}
-                  aria-label={editMode ? 'Zakończ edycję układu' : 'Edytuj układ'}
-                  title={editMode ? 'Zakończ edycję układu' : 'Edytuj układ (przeciąganie bloków)'}
+                  aria-label={editMode ? t('header.stopEditing') : t('header.editLayout')}
+                  title={editMode ? t('header.stopEditing') : t('header.editLayoutHint')}
                 >
-                  {editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                  {editMode ? (
+                    <Check className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                  )}
                 </button>
                 <button
                   onClick={() => setSearchOpen(true)}
                   className="rounded-lg border border-slate-300 p-2 text-slate-700 transition hover:bg-slate-100"
-                  aria-label="Szukaj"
-                  title="Szukaj (Ctrl+K)"
+                  aria-label={t('header.search')}
+                  title={t('header.searchHint')}
                 >
-                  <Search className="h-4 w-4" />
+                  <Search className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <ThemeToggle />
                 <button
                   onClick={signOut}
                   className="flex items-center gap-1.5 rounded-lg border border-slate-300 p-2 text-sm text-slate-700 transition hover:bg-slate-100 sm:px-3 sm:py-1.5"
-                  aria-label="Wyloguj"
+                  aria-label={t('header.signOut')}
                 >
-                  <LogOut className="h-4 w-4" />
-                  <span className="hidden sm:inline">Wyloguj</span>
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">{t('header.signOut')}</span>
                 </button>
               </div>
             </div>
@@ -439,25 +459,23 @@ export default function Dashboard() {
             {editMode && (
               <div className="modal-card mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-indigo-400 bg-indigo-50 px-4 py-3 text-sm text-slate-700">
                 <p className="min-w-0 flex-1">
-                  <strong className="text-indigo-600">Tryb edycji układu.</strong>{' '}
-                  Przeciągaj bloki za uchwyt z nazwą, zakładki oraz przyciski
-                  szybkich linków u góry (ołówek przy przycisku edytuje go, a plus
-                  dodaje nowy). Układ zapisuje się na koncie.
+                  <strong className="text-indigo-600">{t('edit.title')}</strong>{' '}
+                  {t('edit.body')}
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={resetLayout}
                     className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-slate-700 transition hover:bg-slate-100"
                   >
-                    <RotateCcw className="h-4 w-4" />
-                    Domyślny układ
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                    {t('edit.reset')}
                   </button>
                   <button
                     onClick={() => setEditMode(false)}
                     className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 font-semibold text-white transition hover:bg-indigo-700"
                   >
-                    <Check className="h-4 w-4" />
-                    Gotowe
+                    <Check className="h-4 w-4" aria-hidden="true" />
+                    {t('edit.done')}
                   </button>
                 </div>
               </div>
@@ -465,7 +483,7 @@ export default function Dashboard() {
 
             {offlineNote && (
               <p className="mb-6 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                {offlineNote}
+                {t('offline.note', { date: new Date(offlineNote).toLocaleString(locale) })}
               </p>
             )}
 

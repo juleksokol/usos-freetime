@@ -1,9 +1,11 @@
 import {
+  Accessibility,
   Bell,
   CalendarDays,
   Download,
   Dumbbell,
   KeyRound,
+  Languages,
   LayoutDashboard,
   Palette,
   RotateCcw,
@@ -103,6 +105,52 @@ export const SETTINGS_GROUPS = [
             hint: 'Wyłączenie ułatwia pracę na wolniejszych urządzeniach. Szanujemy też systemowe „ogranicz ruch”.',
           },
         ],
+      },
+            
+              {
+        id: 'language',
+        title: 'Język / Language',
+        description: 'Polski lub English. / Polish or English.',
+        icon: Languages,
+        keywords: 'język language polski angielski english polish tłumaczenie',
+        custom: 'language',
+      },
+      {
+        id: 'accessibility',
+        title: 'Dostępność',
+        description: 'Wysoki kontrast, większe elementy i odstępy w tekście.',
+        icon: Accessibility,
+        keywords:
+          'dostępność kontrast czytnik ekranu klawiatura skróty niedowidzący rozmiar tekstu animacje ruch',
+        summary: (s) =>
+          [
+            s.highContrast && 'wysoki kontrast',
+            s.largeTargets && 'większe elementy',
+            s.textSpacing && 'odstępy w tekście',
+          ]
+            .filter(Boolean)
+            .join(', ') || 'ustawienia domyślne',
+        rows: [
+          {
+            key: 'highContrast',
+            type: 'switch',
+            label: 'Wysoki kontrast',
+            hint: 'Ciemniejszy tekst i wyraźniejsze obramowania (w ciemnym motywie jaśniejszy tekst).',
+          },
+          {
+            key: 'largeTargets',
+            type: 'switch',
+            label: 'Większe elementy do klikania',
+            hint: 'Przyciski i pola mają co najmniej 44 px wysokości. Ułatwia obsługę palcem.',
+          },
+          {
+            key: 'textSpacing',
+            type: 'switch',
+            label: 'Większe odstępy w tekście',
+            hint: 'Zwiększa interlinię oraz odstępy między literami i wyrazami. Ułatwia czytanie dłuższych tekstów.',
+          },
+        ],
+        extra: 'a11y',
       },
       {
         id: 'layout',

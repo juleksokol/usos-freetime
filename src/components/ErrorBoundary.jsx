@@ -1,4 +1,5 @@
 import { Component } from 'react'
+import { currentTranslator } from '../lib/i18n'
 import { reportError } from '../lib/monitoring'
 
 // Wyrejestrowuje service workery i czyści pamięć podręczną plików aplikacji.
@@ -65,18 +66,18 @@ export default class ErrorBoundary extends Component {
     window.location.reload()
   }
 
-  render() {
+    render() {
     const { error, copied, clearing } = this.state
     if (!error) return this.props.children
+
+    // Ekran błędu działa poza dostawcami, więc język odczytujemy bezpośrednio
+    const t = currentTranslator()
 
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
-          <h1 className="text-xl font-bold text-slate-800">Coś poszło nie tak</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Aplikacja napotkała błąd. Spróbuj odświeżyć stronę. Jeśli problem
-            wraca, wyczyść pamięć podręczną (zostaniesz zalogowany).
-          </p>
+          <h1 className="text-xl font-bold text-slate-800">{t('error.title')}</h1>
+          <p className="mt-2 text-sm text-slate-600">{t('error.body')}</p>
 
           <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-100 p-3 text-xs text-slate-700">
             {error.message}
@@ -87,20 +88,20 @@ export default class ErrorBoundary extends Component {
               onClick={() => window.location.reload()}
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
             >
-              Odśwież
+              {t('error.refresh')}
             </button>
             <button
               onClick={this.clearAndReload}
               disabled={clearing}
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
             >
-              {clearing ? 'Czyszczenie…' : 'Wyczyść pamięć podręczną i odśwież'}
+              {clearing ? t('error.clearing') : t('error.clearCache')}
             </button>
             <button
               onClick={this.copy}
               className="rounded-lg px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
             >
-              {copied ? 'Skopiowano szczegóły błędu' : 'Skopiuj szczegóły błędu'}
+              {copied ? t('error.copied') : t('error.copy')}
             </button>
           </div>
         </div>

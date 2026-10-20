@@ -150,6 +150,7 @@ export default function GroupsPanel() {
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
+              aria-label="Nazwa nowej grupy"
               placeholder="Nazwa, np. Ekipa od obiadów"
               maxLength={60}
               className={inputClass}
@@ -177,6 +178,7 @@ export default function GroupsPanel() {
               type="text"
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value)}
+              aria-label="Kod zaproszenia do grupy"
               placeholder="Kod od znajomego"
               maxLength={20}
               className={inputClass}

@@ -16,6 +16,8 @@ import { Section } from './controls'
 import { SETTINGS_GROUPS } from './schema'
 import SettingRows from './SettingsRows'
 import SubjectStyles from './SubjectStyles'
+import A11yExtras from './A11yExtras'
+import LanguageBody from './LanguageBody'
 import PasswordBody from './PasswordBody'
 import { useSettings } from '../../context/SettingsContext'
 
@@ -30,8 +32,10 @@ function SectionBody({ section, subjects, onDataChanged }) {
       return <SubjectStyles subjects={subjects} />
     case 'profile':
       return <ProfileBody />
-    case 'password':
+       case 'password':
       return <PasswordBody />
+    case 'language':
+      return <LanguageBody />
         case 'privacy':
       return (
         <>
@@ -59,6 +63,7 @@ function SectionBody({ section, subjects, onDataChanged }) {
       {section.rows && <SettingRows rows={section.rows} />}
       {section.extra === 'layout' && <LayoutExtras />}
       {section.extra === 'notifications' && <NotificationsExtras />}
+      {section.extra === 'a11y' && <A11yExtras />}
     </>
   )
 }

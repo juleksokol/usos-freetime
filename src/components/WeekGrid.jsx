@@ -14,6 +14,7 @@ import { classifyEvent, darkenColor } from '../lib/eventType'
 import { layoutColumns } from '../lib/layout'
 import { countWrappedLines } from '../lib/textFit'
 import { weekMarkers } from '../lib/tests'
+import { tileAriaLabel } from '../lib/a11yLabels'
 import { minutesToTime, timeToMinutes } from '../lib/timeUtils'
 import EventDetailModal from './EventDetailModal'
 
@@ -742,6 +743,7 @@ export default function WeekGrid({
                           pressable ? 'select-none' : ''
                         }`}
                         style={style}
+                        aria-label={tileAriaLabel(block, { picker })}
                         title={[
                           picker ? `Dodaj sprawdzian dla: ${event.title}` : null,
                           block.watermark ? `Osoba: ${block.ownerName}` : null,

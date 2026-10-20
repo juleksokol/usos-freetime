@@ -1,5 +1,6 @@
 import { useId, useState } from 'react'
 import { Eye, EyeOff, Lock } from 'lucide-react'
+import { useI18n } from '../../context/I18nContext'
 
 /**
  * Pole hasła z etykietą i przyciskiem „Pokaż hasło”.
@@ -15,6 +16,7 @@ export default function PasswordField({
   required = true,
   autoFocus = false,
 }) {
+  const { t } = useI18n()
   const id = useId()
   const [visible, setVisible] = useState(false)
 
@@ -43,7 +45,7 @@ export default function PasswordField({
         <button
           type="button"
           onClick={() => setVisible((value) => !value)}
-          aria-label={visible ? 'Ukryj hasło' : 'Pokaż hasło'}
+          aria-label={visible ? t('password.hide') : t('password.show')}
           aria-pressed={visible}
           className="absolute right-1 top-1 flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
         >

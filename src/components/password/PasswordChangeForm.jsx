@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { useI18n } from '../../context/I18nContext'
 import { authErrorText } from '../../lib/authErrors'
 import { isPasswordValid } from '../../lib/passwordPolicy'
 import PasswordChecklist from './PasswordChecklist'
@@ -12,6 +13,7 @@ import PasswordField from './PasswordField'
  */
 export default function PasswordChangeForm({ onDone }) {
   const { user, changePassword } = useAuth()
+  const { t } = useI18n()
   const checklistId = useId()
   const messageId = useId()
 
@@ -30,15 +32,15 @@ export default function PasswordChangeForm({ onDone }) {
     setSuccess('')
 
     if (!isPasswordValid(next, { email })) {
-      setError('Nowe hasło nie spełnia wszystkich wymagań z listy.')
+      setError(t('password.err.rules'))
       return
     }
     if (next !== confirm) {
-      setError('Nowe hasło i jego powtórzenie nie są takie same.')
+      setError(t('password.err.mismatch'))
       return
     }
     if (next === current) {
-      setError('Nowe hasło musi się różnić od obecnego.')
+      setError(t('password.err.same'))
       return
     }
 
@@ -46,14 +48,14 @@ export default function PasswordChangeForm({ onDone }) {
     try {
       const { error: changeError } = await changePassword(current, next)
       if (changeError) {
-        setError(authErrorText(changeError, 'change'))
+        setError(authErrorText(changeError, 'change', t))
         return
       }
 
       setCurrent('')
       setNext('')
       setConfirm('')
-      setSuccess('Hasło zostało zmienione.')
+      setSuccess(t('password.changed'))
       onDone?.()
     } finally {
       setSubmitting(false)
@@ -63,21 +65,21 @@ export default function PasswordChangeForm({ onDone }) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <PasswordField
-        label="Aktualne hasło"
+        label={t('password.current')}
         value={current}
         onChange={setCurrent}
         autoComplete="current-password"
         describedBy={error ? messageId : undefined}
       />
       <PasswordField
-        label="Nowe hasło"
+        label={t('password.new')}
         value={next}
         onChange={setNext}
         autoComplete="new-password"
         describedBy={checklistId}
       />
       <PasswordField
-        label="Powtórz nowe hasło"
+        label={t('password.repeatNew')}
         value={confirm}
         onChange={setConfirm}
         autoComplete="new-password"
@@ -103,7 +105,7 @@ export default function PasswordChangeForm({ onDone }) {
         className="flex w-fit items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-        Zmień hasło
+        {t('password.submit')}
       </button>
     </form>
   )
