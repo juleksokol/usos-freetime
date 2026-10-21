@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { useI18n } from '../../context/I18nContext'
 import { useSettings } from '../../context/SettingsContext'
+import { PANEL_META, TAB_LABEL_KEYS } from '../../lib/labelKeys'
 import {
   notificationPermission,
   requestNotificationPermission,
@@ -14,6 +16,7 @@ const buttonClass =
 // Układ aplikacji: widoczność zakładek i paneli oraz powrót do domyślnej kolejności
 export function LayoutExtras() {
   const { settings, updateSettings } = useSettings()
+  const { t } = useI18n()
 
   // Przełączanie widoczności zakładek i paneli (lista ukrytych elementów)
   const setVisible = (listKey, id, visible) => {
@@ -28,60 +31,64 @@ export function LayoutExtras() {
   }
 
   const resetLayout = () => {
-    if (!window.confirm('Przywrócić domyślny układ bloków i zakładek?')) return
+    if (!window.confirm(t('settings.layout.resetConfirm'))) return
     updateSettings({ layoutOrder: {} })
   }
 
   return (
     <>
-      <p className="py-3 text-sm text-slate-500">
-        Kolejność bloków i zakładek zmienisz ołówkiem w nagłówku aplikacji
-        (przeciąganie).
-      </p>
+      <p className="py-3 text-sm text-slate-500">{t('settings.layout.intro')}</p>
 
-      <SubHeading>Zakładki</SubHeading>
-      {TAB_OPTIONS.map((tab) => (
-        <Row key={tab.id} label={tab.label}>
-          <Switch
-            checked={!settings.hiddenTabs.includes(tab.id)}
-            onChange={(visible) => setVisible('hiddenTabs', tab.id, visible)}
-            label={`Pokaż zakładkę ${tab.label}`}
-          />
-        </Row>
-      ))}
+      <SubHeading>{t('settings.layout.tabs')}</SubHeading>
+      {TAB_OPTIONS.map((tab) => {
+        const name = t(TAB_LABEL_KEYS[tab.id])
 
-      <SubHeading>Panele</SubHeading>
-      {PANEL_OPTIONS.map((panel) => (
-        <Row key={panel.id} label={panel.label} hint={panel.hint}>
-          <Switch
-            checked={!settings.hiddenPanels.includes(panel.id)}
-            onChange={(visible) => setVisible('hiddenPanels', panel.id, visible)}
-            label={`Pokaż panel ${panel.label}`}
-          />
-        </Row>
-      ))}
+        return (
+          <Row key={tab.id} label={name}>
+            <Switch
+              checked={!settings.hiddenTabs.includes(tab.id)}
+              onChange={(visible) => setVisible('hiddenTabs', tab.id, visible)}
+              label={t('settings.layout.showTab', { name })}
+            />
+          </Row>
+        )
+      })}
 
-      <Row
-        label="Przywróć domyślny układ"
-        hint="Kolejność bloków i zakładek wraca do ustawień fabrycznych."
-      >
+      <SubHeading>{t('settings.layout.panels')}</SubHeading>
+      {PANEL_OPTIONS.map((panel) => {
+        const meta = PANEL_META[panel.id]
+        const name = t(meta.label)
+
+        return (
+          <Row key={panel.id} label={name} hint={t(meta.where, { tab: t(meta.tab) })}>
+            <Switch
+              checked={!settings.hiddenPanels.includes(panel.id)}
+              onChange={(visible) => setVisible('hiddenPanels', panel.id, visible)}
+              label={t('settings.layout.showPanel', { name })}
+            />
+          </Row>
+        )
+      })}
+
+      <Row label={t('settings.layout.resetLabel')} hint={t('settings.layout.resetHint')}>
         <button onClick={resetLayout} className={buttonClass}>
-          Przywróć
+          {t('settings.layout.resetButton')}
         </button>
       </Row>
     </>
   )
 }
 
-const PERMISSION_LABELS = {
-  granted: 'Włączone',
-  denied: 'Zablokowane w przeglądarce',
-  default: 'Jeszcze nie włączone',
-  unsupported: 'Niedostępne w tej przeglądarce',
+const PERMISSION_KEYS = {
+  granted: 'settings.notif.granted',
+  denied: 'settings.notif.denied',
+  default: 'settings.notif.default',
+  unsupported: 'settings.notif.unsupported',
 }
 
 // Powiadomienia systemowe: uprawnienie i wysłanie próbnego powiadomienia
 export function NotificationsExtras() {
+  const { t } = useI18n()
   const [permission, setPermission] = useState(notificationPermission)
   const [info, setInfo] = useState('')
 
@@ -91,20 +98,18 @@ export function NotificationsExtras() {
 
   const sendTest = async () => {
     const shown = await showLocalNotification('USOS FreeTime', {
-      body: 'Powiadomienia działają. Przypomnę Ci o sprawdzianach.',
+      body: t('settings.notif.body'),
     })
-    setInfo(
-      shown
-        ? 'Wysłano testowe powiadomienie.'
-        : 'Nie udało się wysłać powiadomienia. Sprawdź uprawnienia przeglądarki.'
-    )
+    setInfo(shown ? t('settings.notif.sent') : t('settings.notif.failed'))
   }
 
   return (
     <>
       <Row
-        label="Powiadomienia systemowe"
-        hint={`Stan: ${PERMISSION_LABELS[permission] ?? permission}.`}
+        label={t('settings.notif.label')}
+        hint={t('settings.notif.state', {
+          state: t(PERMISSION_KEYS[permission] ?? PERMISSION_KEYS.default),
+        })}
       >
         <div className="flex flex-wrap gap-2">
           {permission === 'default' && (
@@ -112,12 +117,12 @@ export function NotificationsExtras() {
               onClick={askPermission}
               className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
             >
-              Włącz
+              {t('settings.notif.enable')}
             </button>
           )}
           {permission === 'granted' && (
             <button onClick={sendTest} className={buttonClass}>
-              Wyślij test
+              {t('settings.notif.test')}
             </button>
           )}
         </div>

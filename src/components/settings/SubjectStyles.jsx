@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useI18n } from '../../context/I18nContext'
 import { useSettings } from '../../context/SettingsContext'
 import { getPalette } from '../../lib/constants'
 import { suggestAbbreviation } from '../../lib/subjects'
@@ -9,6 +10,7 @@ import { selectClass } from './controls'
  */
 export default function SubjectStyles({ subjects }) {
   const { settings, updateSettings } = useSettings()
+  const { t } = useI18n()
 
   const defaultColor = getPalette(settings.personPalette)[0]
   const styles = useMemo(() => settings.subjectStyles ?? {}, [settings.subjectStyles])
@@ -48,7 +50,7 @@ export default function SubjectStyles({ subjects }) {
   }
 
   const clearAll = () => {
-    if (!window.confirm('Usunąć wszystkie własne kolory i skróty przedmiotów?')) return
+    if (!window.confirm(t('settings.subjects.clearConfirm'))) return
     updateSettings({ subjectStyles: {} })
   }
 
@@ -56,26 +58,19 @@ export default function SubjectStyles({ subjects }) {
     'rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100'
 
   if (subjects.length === 0) {
-    return (
-      <p className="py-3 text-sm text-slate-500">
-        Najpierw zaimportuj plan, a przedmioty pojawią się tutaj.
-      </p>
-    )
+    return <p className="py-3 text-sm text-slate-500">{t('settings.subjects.empty')}</p>
   }
 
   return (
     <>
       <div className="py-3">
-        <p className="text-sm text-slate-500">
-          Kolor działa na Twoim planie (na wspólnym planie kolory oznaczają
-          osoby), a skrót widać wszędzie, gdzie nazwa się nie mieści.
-        </p>
+        <p className="text-sm text-slate-500">{t('settings.subjects.intro')}</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button onClick={suggestAll} className={buttonClass}>
-            Zaproponuj skróty
+            {t('settings.subjects.suggest')}
           </button>
           <button onClick={clearAll} className={buttonClass}>
-            Wyczyść wszystko
+            {t('settings.subjects.clear')}
           </button>
         </div>
       </div>
@@ -90,8 +85,8 @@ export default function SubjectStyles({ subjects }) {
               value={style.color ?? defaultColor}
               onChange={(e) => setStyle(subject, { color: e.target.value })}
               className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-slate-300 bg-white p-0.5"
-              aria-label={`Kolor: ${subject}`}
-              title="Kolor przedmiotu"
+              aria-label={t('settings.subjects.colorAria', { subject })}
+              title={t('settings.subjects.colorTitle')}
             />
             <span className="min-w-0 flex-1 basis-40 text-sm text-slate-800">
               {subject}
@@ -100,17 +95,17 @@ export default function SubjectStyles({ subjects }) {
               type="text"
               value={style.abbr ?? ''}
               onChange={(e) => setStyle(subject, { abbr: e.target.value.slice(0, 6) })}
-              placeholder="Skrót"
+              placeholder={t('settings.subjects.abbr')}
               maxLength={6}
               className={`${selectClass} w-24`}
-              aria-label={`Skrót: ${subject}`}
+              aria-label={t('settings.subjects.abbrAria', { subject })}
             />
             <button
               onClick={() => setStyle(subject, { color: null, abbr: null })}
               disabled={!style.color && !style.abbr}
               className="text-sm text-slate-500 transition hover:text-slate-800 disabled:opacity-40"
             >
-              Resetuj
+              {t('settings.subjects.reset')}
             </button>
           </div>
         )

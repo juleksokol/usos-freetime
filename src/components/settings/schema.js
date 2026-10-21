@@ -16,167 +16,169 @@ import {
   User,
   Utensils,
 } from 'lucide-react'
-import { ACCENT_OPTIONS, PANEL_OPTIONS, TAB_OPTIONS } from '../../lib/settingsDefaults'
+import { ACCENT_LABEL_KEYS, TAB_LABEL_KEYS } from '../../lib/labelKeys'
+import { TAB_OPTIONS } from '../../lib/settingsDefaults'
 
 const range = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => from + i)
 const hours = (from, to) =>
   range(from, to).map((hour) => ({ value: hour, label: `${hour}:00` }))
 
-const THEME_LABELS = { system: 'Systemowy', light: 'Jasny', dark: 'Ciemny' }
-
-const tabAndPanelWords = [...TAB_OPTIONS, ...PANEL_OPTIONS]
-  .map((item) => item.label)
-  .join(' ')
+const THEME_KEYS = {
+  system: 'settings.opt.theme.system',
+  light: 'settings.opt.theme.light',
+  dark: 'settings.opt.theme.dark',
+}
 
 /**
- * Opis wszystkich ustawień (grupy -> sekcje -> wiersze).
+ * Opis wszystkich ustawień (grupy -> sekcje -> wiersze). Teksty to klucze tłumaczeń
+ * (titleKey, descriptionKey, keywordsKey, labelKey, hintKey).
  *
- * Wiersz: { key, type, label, hint?, options?, number?, min?, max?, patch? }
+ * Wiersz: { key, type, labelKey, hintKey?, options?, number?, min?, max?, patch? }
  *   type: 'switch' | 'segmented' | 'select' | 'number' | 'date' | 'swatches' | 'palette'
- *   options: lista { value, label } albo funkcja (ustawienia) => lista
+ *   options: lista { value, labelKey | label } albo funkcja (ustawienia) => lista
  *   patch(value, ustawienia): zwraca zmiany do zapisania (gdy jedna opcja zależy od drugiej)
- * Sekcja: { id, title, description, icon, keywords, summary?, rows?, extra?, custom? }
+ * Sekcja: { id, titleKey, descriptionKey, keywordsKey, icon, summary?, rows?, extra?, custom? }
+ *   summary(ustawienia, t): krótkie podsumowanie w nagłówku sekcji
  *   extra: dodatkowa zawartość pod wierszami; custom: cała zawartość sekcji jest własna
  */
 export const SETTINGS_GROUPS = [
   {
     id: 'look',
-    title: 'Wygląd i układ',
+    titleKey: 'settings.group.look',
     sections: [
       {
         id: 'appearance',
-        title: 'Motyw i kolory',
-        description: 'Jasny lub ciemny motyw, kolor akcentu, rozmiar tekstu.',
+        titleKey: 'settings.sec.appearance.title',
+        descriptionKey: 'settings.sec.appearance.desc',
+        keywordsKey: 'settings.sec.appearance.kw',
         icon: Palette,
-        keywords:
-          'wygląd motyw ciemny jasny kolor akcent tekst czcionka paleta osób gęstość animacje',
-        summary: (s) =>
-          `${THEME_LABELS[s.theme] ?? s.theme} · ${
-            ACCENT_OPTIONS.find((item) => item.id === s.accent)?.label ?? s.accent
-          }`,
+        summary: (s, t) =>
+          `${t(THEME_KEYS[s.theme] ?? THEME_KEYS.system)} · ${t(
+            ACCENT_LABEL_KEYS[s.accent] ?? ACCENT_LABEL_KEYS.indigo
+          )}`,
         rows: [
           {
             key: 'theme',
             type: 'segmented',
-            label: 'Motyw',
+            labelKey: 'settings.row.theme.label',
             options: [
-              { value: 'system', label: 'Systemowy' },
-              { value: 'light', label: 'Jasny' },
-              { value: 'dark', label: 'Ciemny' },
+              { value: 'system', labelKey: 'settings.opt.theme.system' },
+              { value: 'light', labelKey: 'settings.opt.theme.light' },
+              { value: 'dark', labelKey: 'settings.opt.theme.dark' },
             ],
           },
-          { key: 'accent', type: 'swatches', label: 'Kolor akcentu' },
+          { key: 'accent', type: 'swatches', labelKey: 'settings.row.accent.label' },
           {
             key: 'fontScale',
             type: 'segmented',
-            label: 'Rozmiar tekstu',
+            labelKey: 'settings.row.fontScale.label',
             options: [
-              { value: 'small', label: 'Mały' },
-              { value: 'normal', label: 'Normalny' },
-              { value: 'large', label: 'Duży' },
+              { value: 'small', labelKey: 'settings.opt.font.small' },
+              { value: 'normal', labelKey: 'settings.opt.font.normal' },
+              { value: 'large', labelKey: 'settings.opt.font.large' },
             ],
           },
           {
             key: 'density',
             type: 'segmented',
-            label: 'Gęstość siatki',
-            hint: 'Wysokość jednej godziny na planie.',
+            labelKey: 'settings.row.density.label',
+            hintKey: 'settings.row.density.hint',
             options: [
-              { value: 'compact', label: 'Kompaktowa' },
-              { value: 'normal', label: 'Normalna' },
-              { value: 'spacious', label: 'Przestronna' },
+              { value: 'compact', labelKey: 'settings.opt.density.compact' },
+              { value: 'normal', labelKey: 'settings.opt.density.normal' },
+              { value: 'spacious', labelKey: 'settings.opt.density.spacious' },
             ],
           },
           {
             key: 'personPalette',
             type: 'palette',
-            label: 'Paleta kolorów osób',
-            hint: 'Kolory, którymi oznaczone są osoby na wspólnym planie.',
+            labelKey: 'settings.row.personPalette.label',
+            hintKey: 'settings.row.personPalette.hint',
             options: [
-              { value: 'standard', label: 'Standardowa' },
-              { value: 'colorblind', label: 'Dla daltonistów' },
-              { value: 'pastel', label: 'Pastelowa' },
+              { value: 'standard', labelKey: 'settings.opt.palette.standard' },
+              { value: 'colorblind', labelKey: 'settings.opt.palette.colorblind' },
+              { value: 'pastel', labelKey: 'settings.opt.palette.pastel' },
             ],
           },
           {
             key: 'animations',
             type: 'switch',
-            label: 'Animacje',
-            hint: 'Wyłączenie ułatwia pracę na wolniejszych urządzeniach. Szanujemy też systemowe „ogranicz ruch”.',
+            labelKey: 'settings.row.animations.label',
+            hintKey: 'settings.row.animations.hint',
           },
         ],
       },
-            
-              {
+      {
+        // Nazwa sekcji jest dwujęzyczna, więc nie korzysta z tłumaczeń
         id: 'language',
         title: 'Język / Language',
         description: 'Polski lub English. / Polish or English.',
-        icon: Languages,
         keywords: 'język language polski angielski english polish tłumaczenie',
+        icon: Languages,
         custom: 'language',
       },
       {
         id: 'accessibility',
-        title: 'Dostępność',
-        description: 'Wysoki kontrast, większe elementy i odstępy w tekście.',
+        titleKey: 'settings.sec.accessibility.title',
+        descriptionKey: 'settings.sec.accessibility.desc',
+        keywordsKey: 'settings.sec.accessibility.kw',
         icon: Accessibility,
-        keywords:
-          'dostępność kontrast czytnik ekranu klawiatura skróty niedowidzący rozmiar tekstu animacje ruch',
-        summary: (s) =>
+        summary: (s, t) =>
           [
-            s.highContrast && 'wysoki kontrast',
-            s.largeTargets && 'większe elementy',
-            s.textSpacing && 'odstępy w tekście',
+            s.highContrast && t('settings.sum.contrast'),
+            s.largeTargets && t('settings.sum.targets'),
+            s.textSpacing && t('settings.sum.spacing'),
           ]
             .filter(Boolean)
-            .join(', ') || 'ustawienia domyślne',
+            .join(', ') || t('settings.sum.default'),
         rows: [
           {
             key: 'highContrast',
             type: 'switch',
-            label: 'Wysoki kontrast',
-            hint: 'Ciemniejszy tekst i wyraźniejsze obramowania (w ciemnym motywie jaśniejszy tekst).',
+            labelKey: 'settings.row.highContrast.label',
+            hintKey: 'settings.row.highContrast.hint',
           },
           {
             key: 'largeTargets',
             type: 'switch',
-            label: 'Większe elementy do klikania',
-            hint: 'Przyciski i pola mają co najmniej 44 px wysokości. Ułatwia obsługę palcem.',
+            labelKey: 'settings.row.largeTargets.label',
+            hintKey: 'settings.row.largeTargets.hint',
           },
           {
             key: 'textSpacing',
             type: 'switch',
-            label: 'Większe odstępy w tekście',
-            hint: 'Zwiększa interlinię oraz odstępy między literami i wyrazami. Ułatwia czytanie dłuższych tekstów.',
+            labelKey: 'settings.row.textSpacing.label',
+            hintKey: 'settings.row.textSpacing.hint',
           },
         ],
         extra: 'a11y',
       },
       {
         id: 'layout',
-        title: 'Układ aplikacji',
-        description: 'Zakładka startowa oraz widoczność zakładek i paneli.',
+        titleKey: 'settings.sec.layout.title',
+        descriptionKey: 'settings.sec.layout.desc',
+        keywordsKey: 'settings.sec.layout.kw',
         icon: LayoutDashboard,
-        keywords: `układ zakładki panele ukryj pokaż start przesuwanie ołówek ${tabAndPanelWords}`,
-        summary: (s) =>
-          `ukryte: ${s.hiddenTabs.length} zakładek, ${
-            s.hiddenPanels.filter((id) => id !== 'now').length
-          } paneli`,
+        summary: (s, t) =>
+          t('settings.sum.layout', {
+            tabs: s.hiddenTabs.length,
+            panels: s.hiddenPanels.filter((id) => id !== 'now').length,
+          }),
         rows: [
           {
             key: 'startTab',
             type: 'select',
-            label: 'Zakładka startowa',
+            labelKey: 'settings.row.startTab.label',
             options: [
-              { value: 'last', label: 'Ostatnio używana' },
-              ...TAB_OPTIONS.map((tab) => ({ value: tab.id, label: tab.label })),
+              { value: 'last', labelKey: 'settings.opt.startTab.last' },
+              ...TAB_OPTIONS.map((tab) => ({ value: tab.id, labelKey: TAB_LABEL_KEYS[tab.id] })),
             ],
           },
-                  {
+          {
             key: 'showQuickLinks',
             type: 'switch',
-            label: 'Szybkie linki w nagłówku',
-            hint: 'Przyciski z linkami (UPeL, Syllabus, poczta…) obok logo, a na telefonie przycisk z siatką. Wyłączenie tylko je ukrywa, zapisane linki zostają.',
+            labelKey: 'settings.row.showQuickLinks.label',
+            hintKey: 'settings.row.showQuickLinks.hint',
           },
         ],
         extra: 'layout',
@@ -185,137 +187,141 @@ export const SETTINGS_GROUPS = [
   },
   {
     id: 'plan',
-    title: 'Plan zajęć',
+    titleKey: 'settings.group.plan',
     sections: [
       {
         id: 'grid',
-        title: 'Siatka tygodnia',
-        description: 'Godziny, weekend, linia „teraz” i gesty.',
+        titleKey: 'settings.sec.grid.title',
+        descriptionKey: 'settings.sec.grid.desc',
+        keywordsKey: 'settings.sec.grid.kw',
         icon: CalendarDays,
-        keywords:
-          'siatka godziny weekend sobota niedziela linia teraz przewijanie gesty przesuwanie palcem tydzień dzień',
-        summary: (s) =>
-          `${s.gridStartHour}:00–${s.gridEndHour}:00${s.showWeekend ? ' · z weekendem' : ''}`,
+        summary: (s, t) =>
+          `${s.gridStartHour}:00–${s.gridEndHour}:00${s.showWeekend ? t('settings.sum.weekend') : ''}`,
         rows: [
           {
             key: 'gridStartHour',
             type: 'select',
             number: true,
-            label: 'Pierwsza godzina siatki',
+            labelKey: 'settings.row.gridStartHour.label',
             options: hours(5, 12),
           },
           {
             key: 'gridEndHour',
             type: 'select',
             number: true,
-            label: 'Ostatnia godzina siatki',
+            labelKey: 'settings.row.gridEndHour.label',
             options: hours(14, 24),
           },
           {
             key: 'showWeekend',
             type: 'switch',
-            label: 'Sobota i niedziela',
-            hint: 'Dodatkowe kolumny na siatce i w okienkach.',
+            labelKey: 'settings.row.showWeekend.label',
+            hintKey: 'settings.row.showWeekend.hint',
           },
           {
             key: 'showNowLine',
             type: 'switch',
-            label: 'Linia „teraz”',
-            hint: 'Czerwona linia w dzisiejszej kolumnie.',
+            labelKey: 'settings.row.showNowLine.label',
+            hintKey: 'settings.row.showNowLine.hint',
           },
           {
             key: 'autoScrollNow',
             type: 'switch',
-            label: 'Przewijaj do bieżącego dnia i godziny',
-            hint: 'Po wejściu na plan siatka ustawia się na linii „teraz”, a na telefonie także na dzisiejszym dniu.',
+            labelKey: 'settings.row.autoScrollNow.label',
+            hintKey: 'settings.row.autoScrollNow.hint',
           },
           {
             key: 'swipeNav',
             type: 'switch',
-            label: 'Przesuwanie palcem między tygodniami i dniami',
-            hint: 'Gest w bok na telefonie zmienia tydzień albo dzień.',
+            labelKey: 'settings.row.swipeNav.label',
+            hintKey: 'settings.row.swipeNav.hint',
           },
         ],
       },
       {
         id: 'tiles',
-        title: 'Kafelki zajęć',
-        description: 'Co pokazują kafelki: litera typu, prowadzący, skróty.',
+        titleKey: 'settings.sec.tiles.title',
+        descriptionKey: 'settings.sec.tiles.desc',
+        keywordsKey: 'settings.sec.tiles.kw',
         icon: SlidersHorizontal,
-        keywords:
-          'kafelki litera typ wykład ćwiczenia laboratorium projekt seminarium konwersatorium zdalne prowadzący skróty godziny sala znak wodny pseudonim legenda wydarzenia',
-        summary: (s) =>
+        summary: (s, t) =>
           [
-            s.showTypeWatermark && 'litery',
-            s.tileShowTeacher && 'prowadzący',
-            s.useAbbreviations && 'skróty',
+            s.showTypeWatermark && t('settings.sum.letters'),
+            s.tileShowTeacher && t('settings.sum.teacher'),
+            s.useAbbreviations && t('settings.sum.abbr'),
           ]
             .filter(Boolean)
-            .join(', ') || 'minimalne',
+            .join(', ') || t('settings.sum.minimal'),
         rows: [
           {
             key: 'showTypeWatermark',
             type: 'switch',
-            label: 'Litera typu zajęć',
-            hint: 'Bardzo blady znak wodny: W wykład, Ć ćwiczenia, L laboratorium (ciemniejszy odcień), P projekt, S seminarium, K konwersatorium, Z zajęcia zdalne.',
+            labelKey: 'settings.row.showTypeWatermark.label',
+            hintKey: 'settings.row.showTypeWatermark.hint',
           },
-          { key: 'tileShowTime', type: 'switch', label: 'Godziny na kafelkach' },
-          { key: 'tileShowLocation', type: 'switch', label: 'Miejsce (sala) na kafelkach' },
+          { key: 'tileShowTime', type: 'switch', labelKey: 'settings.row.tileShowTime.label' },
+          {
+            key: 'tileShowLocation',
+            type: 'switch',
+            labelKey: 'settings.row.tileShowLocation.label',
+          },
           {
             key: 'tileShowTeacher',
             type: 'switch',
-            label: 'Prowadzący na kafelkach',
-            hint: 'Widoczny na Twoim planie, gdy kafelek jest dość wysoki.',
+            labelKey: 'settings.row.tileShowTeacher.label',
+            hintKey: 'settings.row.tileShowTeacher.hint',
           },
           {
             key: 'useAbbreviations',
             type: 'switch',
-            label: 'Skróty przedmiotów',
-            hint: 'Skrót pojawia się tylko wtedy, gdy pełna nazwa nie mieści się na kafelku w dwóch liniach.',
+            labelKey: 'settings.row.useAbbreviations.label',
+            hintKey: 'settings.row.useAbbreviations.hint',
           },
           {
             key: 'showWatermark',
             type: 'switch',
-            label: 'Pseudonim jako znak wodny',
-            hint: 'Na wspólnym planie: do kogo należą zajęcia.',
+            labelKey: 'settings.row.showWatermark.label',
+            hintKey: 'settings.row.showWatermark.hint',
           },
-          { key: 'showLegend', type: 'switch', label: 'Legenda osób nad planem' },
+          { key: 'showLegend', type: 'switch', labelKey: 'settings.row.showLegend.label' },
           {
             key: 'highlightCustom',
             type: 'switch',
-            label: 'Wyróżniaj własne wydarzenia',
-            hint: 'Przerywana ramka i ukośny wzór na kafelkach.',
+            labelKey: 'settings.row.highlightCustom.label',
+            hintKey: 'settings.row.highlightCustom.hint',
           },
         ],
       },
       {
         id: 'subjects',
-        title: 'Kolory i skróty przedmiotów',
-        description: 'Własny kolor i skrót dla każdego przedmiotu.',
+        titleKey: 'settings.sec.subjects.title',
+        descriptionKey: 'settings.sec.subjects.desc',
+        keywordsKey: 'settings.sec.subjects.kw',
         icon: Tag,
-        keywords: 'kolory skróty przedmioty kolor przedmiotu skrót nazwa',
         custom: 'subjects',
       },
     ],
   },
   {
     id: 'features',
-    title: 'Okienka, sprawdziany i wyzwanie',
+    titleKey: 'settings.group.features',
     sections: [
       {
         id: 'slots',
-        title: 'Wspólne okienka',
-        description: 'Domyślne ustawienia wyszukiwania okienek.',
+        titleKey: 'settings.sec.slots.title',
+        descriptionKey: 'settings.sec.slots.desc',
+        keywordsKey: 'settings.sec.slots.kw',
         icon: Utensils,
-        keywords: 'okienka wspólne minimalna długość pora obiadu obiad lunch',
-        summary: (s) =>
-          `${s.minDuration} min${s.lunchOnly ? ` · obiad ${s.lunchStart}–${s.lunchEnd}` : ''}`,
+        summary: (s, t) =>
+          `${s.minDuration} min${
+            s.lunchOnly ? t('settings.sum.lunch', { from: s.lunchStart, to: s.lunchEnd }) : ''
+          }`,
         rows: [
           {
             key: 'minDuration',
             type: 'select',
             number: true,
-            label: 'Minimalna długość okienka',
+            labelKey: 'settings.row.minDuration.label',
             options: [30, 45, 60, 90].map((minutes) => ({
               value: minutes,
               label: `${minutes} min`,
@@ -324,14 +330,14 @@ export const SETTINGS_GROUPS = [
           {
             key: 'lunchOnly',
             type: 'switch',
-            label: 'Tylko pora obiadu',
-            hint: 'Szukaj okienek tylko w oknie czasu poniżej.',
+            labelKey: 'settings.row.lunchOnly.label',
+            hintKey: 'settings.row.lunchOnly.hint',
           },
           {
             key: 'lunchStart',
             type: 'select',
             number: true,
-            label: 'Pora obiadu: od',
+            labelKey: 'settings.row.lunchStart.label',
             options: hours(9, 14),
             patch: (value, s) => ({
               lunchStart: value,
@@ -342,50 +348,51 @@ export const SETTINGS_GROUPS = [
             key: 'lunchEnd',
             type: 'select',
             number: true,
-            label: 'Pora obiadu: do',
-                       options: (s) => hours(10, 18).filter((option) => option.value > s.lunchStart),
+            labelKey: 'settings.row.lunchEnd.label',
+            options: (s) => hours(10, 18).filter((option) => option.value > s.lunchStart),
           },
           {
             key: 'testsCountAsBusy',
             type: 'switch',
-            label: 'Moje sprawdziany jako zajęty czas',
-            hint: 'Wspólne okienka omijają godziny, w których masz kolokwium lub egzamin. Dotyczy tylko Ciebie: sprawdziany widzisz tylko Ty, więc znajomi ich nie uwzględnią.',
+            labelKey: 'settings.row.testsCountAsBusy.label',
+            hintKey: 'settings.row.testsCountAsBusy.hint',
           },
         ],
       },
       {
         id: 'tests',
-        title: 'Sprawdziany i powiadomienia',
-        description: 'Jak pokazywać sprawdziany i kiedy o nich przypominać.',
+        titleKey: 'settings.sec.tests.title',
+        descriptionKey: 'settings.sec.tests.desc',
+        keywordsKey: 'settings.sec.tests.kw',
         icon: Bell,
-        keywords:
-          'sprawdziany kolokwia egzaminy kropki przypomnienia powiadomienia godzina przypomnienia',
-        summary: (s) =>
-          s.remindersEnabled ? `przypomnienia od ${s.reminderHour}:00` : 'przypomnienia wyłączone',
+        summary: (s, t) =>
+          s.remindersEnabled
+            ? t('settings.sum.remindersFrom', { hour: s.reminderHour })
+            : t('settings.sum.remindersOff'),
         rows: [
           {
             key: 'showTestsOnPlan',
             type: 'switch',
-            label: 'Sprawdziany na moim planie',
-            hint: 'Kolorowe kafelki (egzamin czerwony, kolokwium pomarańczowe, reszta zielona). Po wyłączeniu zobaczysz je jako kropki na zajęciach.',
+            labelKey: 'settings.row.showTestsOnPlan.label',
+            hintKey: 'settings.row.showTestsOnPlan.hint',
           },
           {
             key: 'showExamDots',
             type: 'switch',
-            label: 'Kropki sprawdzianów na wspólnym planie',
-            hint: 'Mała kropka w rogu zajęć z przedmiotu, z którego masz w tym tygodniu sprawdzian. Widzisz ją tylko Ty.',
+            labelKey: 'settings.row.showExamDots.label',
+            hintKey: 'settings.row.showExamDots.hint',
           },
           {
             key: 'remindersEnabled',
             type: 'switch',
-            label: 'Przypomnienia o sprawdzianach',
-            hint: 'Dzień przed od wybranej godziny oraz rano w dniu sprawdzianu, gdy aplikacja jest otwarta lub działa w tle.',
+            labelKey: 'settings.row.remindersEnabled.label',
+            hintKey: 'settings.row.remindersEnabled.hint',
           },
           {
             key: 'reminderHour',
             type: 'select',
             number: true,
-            label: 'Godzina przypomnienia dzień przed',
+            labelKey: 'settings.row.reminderHour.label',
             options: hours(12, 12).concat(hours(14, 14), hours(16, 22)),
           },
         ],
@@ -393,26 +400,27 @@ export const SETTINGS_GROUPS = [
       },
       {
         id: 'pushups',
-        title: 'Licznik pompek',
-        description: 'Dzienna liczba rośnie o stały przyrost co 7 dni od daty startu.',
+        titleKey: 'settings.sec.pushups.title',
+        descriptionKey: 'settings.sec.pushups.desc',
+        keywordsKey: 'settings.sec.pushups.kw',
         icon: Dumbbell,
-        keywords: 'pompki wyzwanie licznik start przyrost tydzień',
-        summary: (s) => `${s.pushupsStartCount} +${s.pushupsWeeklyIncrement} tygodniowo`,
+        summary: (s, t) =>
+          t('settings.sum.pushups', { start: s.pushupsStartCount, inc: s.pushupsWeeklyIncrement }),
         rows: [
-          { key: 'pushupsStartDate', type: 'date', label: 'Data startu wyzwania' },
+          { key: 'pushupsStartDate', type: 'date', labelKey: 'settings.row.pushupsStartDate.label' },
           {
             key: 'pushupsStartCount',
             type: 'number',
             min: 0,
             max: 999,
-            label: 'Pompek dziennie na starcie',
+            labelKey: 'settings.row.pushupsStartCount.label',
           },
           {
             key: 'pushupsWeeklyIncrement',
             type: 'number',
             min: 0,
             max: 100,
-            label: 'Przyrost co tydzień',
+            labelKey: 'settings.row.pushupsWeeklyIncrement.label',
           },
         ],
       },
@@ -420,54 +428,54 @@ export const SETTINGS_GROUPS = [
   },
   {
     id: 'account',
-    title: 'Konto i dane',
+    titleKey: 'settings.group.account',
     sections: [
       {
         id: 'profile',
-        title: 'Profil',
-        description: 'Pseudonim widoczny dla znajomych.',
+        titleKey: 'settings.sec.profile.title',
+        descriptionKey: 'settings.sec.profile.desc',
+        keywordsKey: 'settings.sec.profile.kw',
         icon: User,
-        keywords: 'profil pseudonim imię nick nazwa',
         custom: 'profile',
       },
       {
         id: 'password',
-        title: 'Hasło',
-        description: 'Zmiana hasła do konta.',
+        titleKey: 'settings.sec.password.title',
+        descriptionKey: 'settings.sec.password.desc',
+        keywordsKey: 'settings.sec.password.kw',
         icon: KeyRound,
-        keywords: 'hasło zmiana hasła bezpieczeństwo logowanie konto',
         custom: 'password',
       },
       {
         id: 'privacy',
-        title: 'Prywatność',
-        description: 'Co widzą znajomi z Twoich grup.',
+        titleKey: 'settings.sec.privacy.title',
+        descriptionKey: 'settings.sec.privacy.desc',
+        keywordsKey: 'settings.sec.privacy.kw',
         icon: ShieldCheck,
-        keywords: 'prywatność szczegóły zajęć zajęty znajomi widoczność',
         custom: 'privacy',
       },
       {
         id: 'export',
-        title: 'Eksport danych',
-        description: 'Kopia Twoich danych i polityka prywatności.',
+        titleKey: 'settings.sec.export.title',
+        descriptionKey: 'settings.sec.export.desc',
+        keywordsKey: 'settings.sec.export.kw',
         icon: Download,
-        keywords: 'eksport dane json ics kalendarz kopia pobierz polityka prywatności',
         custom: 'export',
       },
       {
         id: 'reset',
-        title: 'Przywracanie',
-        description: 'Powrót do domyślnych ustawień interfejsu.',
+        titleKey: 'settings.sec.reset.title',
+        descriptionKey: 'settings.sec.reset.desc',
+        keywordsKey: 'settings.sec.reset.kw',
         icon: RotateCcw,
-        keywords: 'przywróć domyślne reset ustawienia interfejs',
         custom: 'reset',
       },
       {
         id: 'danger',
-        title: 'Usuwanie danych i konta',
-        description: 'Operacje nieodwracalne.',
+        titleKey: 'settings.sec.danger.title',
+        descriptionKey: 'settings.sec.danger.desc',
+        keywordsKey: 'settings.sec.danger.kw',
         icon: Trash2,
-        keywords: 'usuń usunięcie konto plan dane kasowanie',
         custom: 'danger',
       },
     ],

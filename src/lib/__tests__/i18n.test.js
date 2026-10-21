@@ -108,9 +108,13 @@ describe('słowniki PL i EN', () => {
     }
   })
 
+  // Wyjątki: teksty, które celowo cytują polskie litery (np. oznaczenia typów zajęć)
+  const POLISH_LETTERS_ALLOWED = new Set(['settings.row.showTypeWatermark.hint'])
+
   it('angielski nie zawiera polskich liter ani skopiowanych polskich tekstów', () => {
     for (const [key, text] of Object.entries(en)) {
-      expect(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(text) && key).toBe(false)
+      const hasPolishLetters = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(text)
+      expect(hasPolishLetters && !POLISH_LETTERS_ALLOWED.has(key) && key).toBe(false)
       expect(text === pl[key] && key).toBe(false)
     }
   })
