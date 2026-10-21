@@ -67,14 +67,14 @@ export default function AccessibilityPage() {
           Aplikacja jest dostępna tylko w języku polskim (wersja angielska jest planowana).
         </li>
         <li className={li}>
-          Testy z czytnikami ekranu: [uzupełnij, jakie czytniki i przeglądarki sprawdzono].
+          Testy z czytnikami ekranu: Brak.
         </li>
       </ul>
 
       <h2 className={h2}>Zgłaszanie problemów</h2>
       <p className={p}>
         Jeśli napotkasz barierę, napisz na adres usos.freetime@gmail.com. Opisz, co nie działa, na jakim
-        urządzeniu i w jakiej przeglądarce. Postaramy się odpowiedzieć w ciągu [liczba] dni
+        urządzeniu i w jakiej przeglądarce. Postaramy się odpowiedzieć w ciągu 14 dni
         roboczych i zaproponować dostępną alternatywę.
       </p>
     </main>
