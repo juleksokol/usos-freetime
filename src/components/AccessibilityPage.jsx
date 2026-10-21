@@ -73,7 +73,7 @@ export default function AccessibilityPage() {
 
       <h2 className={h2}>Zgłaszanie problemów</h2>
       <p className={p}>
-        Jeśli napotkasz barierę, napisz na adres [adres e-mail]. Opisz, co nie działa, na jakim
+        Jeśli napotkasz barierę, napisz na adres usos.freetime@gmail.com. Opisz, co nie działa, na jakim
         urządzeniu i w jakiej przeglądarce. Postaramy się odpowiedzieć w ciągu [liczba] dni
         roboczych i zaproponować dostępną alternatywę.
       </p>
