@@ -1,14 +1,16 @@
 import en from './en'
 import enSettings from './en.settings'
+import enToday from './en.today'
 import pl from './pl'
 import plSettings from './pl.settings'
+import plToday from './pl.today'
 import { DEFAULT_CHOICE, browserLanguages, readStoredLanguage, resolveChoice } from './language'
 import { createTranslator } from './translate'
 
 // Słowniki składamy z modułów (podstawowy + po jednym na obszar aplikacji)
 export const DICTIONARIES = {
-  pl: { ...pl, ...plSettings },
-  en: { ...en, ...enSettings },
+  pl: { ...pl, ...plSettings, ...plToday },
+  en: { ...en, ...enSettings, ...enToday },
 }
 export { createTranslator, interpolate } from './translate'
 export * from './language'

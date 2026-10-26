@@ -1,16 +1,14 @@
 import { Bell } from 'lucide-react'
+import { useI18n } from '../context/I18nContext'
+import useFormat from '../hooks/useFormat'
 import { addDays, todayISO } from '../lib/dateUtils'
-import {
-  countdownLabel,
-  daysUntil,
-  shortMonth,
-  sortTests,
-  testDisplayName,
-  testKind,
-} from '../lib/tests'
+import { formatCountdown, testDisplayName } from '../lib/localeFormat'
+import { daysUntil, sortTests, testKind } from '../lib/tests'
 
 // Sprawdziany z najbliższych 14 dni (karta na stronie "Dziś"); bez nich nic nie pokazujemy
 export default function UpcomingTests({ tests, onOpen }) {
+  const { t } = useI18n()
+  const fmt = useFormat()
   const today = todayISO()
   const until = addDays(today, 14)
 
@@ -23,8 +21,8 @@ export default function UpcomingTests({ tests, onOpen }) {
   return (
     <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
       <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800">
-        <Bell className="h-5 w-5 text-indigo-600" />
-        Nadchodzące sprawdziany
+        <Bell className="h-5 w-5 text-indigo-600" aria-hidden="true" />
+        {t('upcoming.title')}
       </h3>
 
       <ul className="mt-3 flex flex-col gap-2">
@@ -45,9 +43,7 @@ export default function UpcomingTests({ tests, onOpen }) {
                   style={{ backgroundColor: `${kind.color}22`, color: kind.color }}
                 >
                   {Number(test.test_date.split('-')[2])}
-                  <span className="text-[9px] uppercase">
-                    {shortMonth(test.test_date)}
-                  </span>
+                  <span className="text-[9px] uppercase">{fmt.shortMonth(test.test_date)}</span>
                 </span>
 
                 <span className="min-w-0 flex-1">
@@ -55,7 +51,7 @@ export default function UpcomingTests({ tests, onOpen }) {
                     {test.subject}
                   </span>
                   <span className="block truncate text-xs text-slate-500">
-                    {testDisplayName(test)} · {test.start_time.slice(0, 5)}–
+                    {testDisplayName(test, t)} · {test.start_time.slice(0, 5)}–
                     {test.end_time.slice(0, 5)}
                     {test.location ? ` · ${test.location}` : ''}
                   </span>
@@ -71,7 +67,7 @@ export default function UpcomingTests({ tests, onOpen }) {
                       : { backgroundColor: `${kind.color}22`, color: kind.color }
                   }
                 >
-                  {countdownLabel(days)}
+                  {formatCountdown(days, t)}
                 </span>
               </button>
             </li>

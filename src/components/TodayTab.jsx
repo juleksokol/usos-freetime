@@ -7,18 +7,14 @@ import {
   Utensils,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useI18n } from '../context/I18nContext'
 import { useSettings } from '../context/SettingsContext'
 import { ALL_DAYS, WORKDAYS, getPalette } from '../lib/constants'
-import {
-  addDays,
-  eventsOnDate,
-  formatLongDate,
-  todayISO,
-  weekdayOf,
-} from '../lib/dateUtils'
+import { addDays, eventsOnDate, todayISO, weekdayOf } from '../lib/dateUtils'
 import { findCommonFreeSlots } from '../lib/freeSlots'
 import { loadHidden } from '../lib/hiddenStore'
 import { minutesToTime } from '../lib/timeUtils'
+import useFormat from '../hooks/useFormat'
 import useGroups from '../hooks/useGroups'
 import usePersistentState from '../hooks/usePersistentState'
 import useSchedules from '../hooks/useSchedules'
@@ -57,8 +53,10 @@ export default function TodayTab({
 }) {
   const { user, profile } = useAuth()
   const { settings } = useSettings()
+  const { t } = useI18n()
+  const fmt = useFormat()
   const userId = user?.id
-  const myName = profile?.display_name ?? 'Ja'
+  const myName = profile?.display_name ?? t('today.me')
   const testBusy = useTestBusy()
 
   const { groups, loading: groupsLoading } = useGroups(syncTick)
@@ -111,7 +109,7 @@ export default function TodayTab({
   const slots =
     !busy && members.length > 0 && dayIncluded
       ? findCommonFreeSlots(
-                    members.flatMap((member) =>
+          members.flatMap((member) =>
             member.userId === testBusy.userId
               ? [...dayEvents(member.userId), ...testBusy.onDate(date)]
               : dayEvents(member.userId)
@@ -132,9 +130,11 @@ export default function TodayTab({
     <section className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex min-w-0 items-center gap-2 text-lg font-semibold text-slate-800">
-          <CalendarCheck className="h-5 w-5 shrink-0 text-indigo-600" />
+          <CalendarCheck className="h-5 w-5 shrink-0 text-indigo-600" aria-hidden="true" />
           <span className="min-w-0">
-            {isToday ? 'Dziś' : 'Dzień'}: {formatLongDate(date)}
+            {t(isToday ? 'today.headingToday' : 'today.headingDay', {
+              date: fmt.longDate(date),
+            })}
           </span>
         </h2>
 
@@ -142,26 +142,26 @@ export default function TodayTab({
           <button
             onClick={() => setDate(addDays(date, -1))}
             className={navButtonClass}
-            aria-label="Poprzedni dzień"
+            aria-label={t('today.prevDay')}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </button>
           <button
             onClick={() => setDate(addDays(date, 1))}
             className={navButtonClass}
-            aria-label="Następny dzień"
+            aria-label={t('today.nextDay')}
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
           <button onClick={() => setDate(todayISO())} className={navButtonClass}>
-            Dziś
+            {t('today.todayButton')}
           </button>
         </div>
       </div>
 
       {groups.length > 1 && (
         <label className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-          Grupa:
+          {t('today.group')}
           <select
             value={group?.id ?? ''}
             onChange={(e) => setStoredGroupId(e.target.value)}
@@ -177,14 +177,11 @@ export default function TodayTab({
       )}
 
       {!groupsLoading && !group && (
-        <p className="text-sm text-slate-500">
-          Nie należysz do żadnej grupy, więc widzisz tylko swój dzień. Dołącz do
-          grupy w zakładce „Grupy”, żeby zobaczyć znajomych.
-        </p>
+        <p className="text-sm text-slate-500">{t('today.noGroup')}</p>
       )}
 
       {error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       )}
@@ -194,33 +191,27 @@ export default function TodayTab({
   const slotsBlock = !showPanel('todaySlots') ? null : (
     <section className="rounded-2xl bg-white p-4 shadow sm:p-6">
       <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800">
-        <Utensils className="h-5 w-5 shrink-0 text-green-600" />
-        Wspólne okienka {isToday ? '(od teraz)' : ''}
+        <Utensils className="h-5 w-5 shrink-0 text-green-600" aria-hidden="true" />
+        {t('today.slotsTitle')} {isToday ? t('today.slotsFromNow') : ''}
       </h3>
 
       {busy ? (
-        <Loader2 className="mt-3 h-6 w-6 animate-spin text-indigo-600" />
+        <Loader2 className="mt-3 h-6 w-6 animate-spin text-indigo-600" aria-hidden="true" />
       ) : members.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-500">
-          Wszyscy są ukryci. Pokaż kogoś w zakładce „Wspólne okienka”.
-        </p>
+        <p className="mt-2 text-sm text-slate-500">{t('today.allHidden')}</p>
       ) : (
         <>
           <p className="mt-1 text-sm text-slate-500">
-            Dla: {members.map((member) => member.displayName).join(', ')}.
-            Minimalna długość: {settings.minDuration} min (zmienisz ją w
-            Ustawieniach).
+            {t('today.slotsFor', {
+              names: members.map((member) => member.displayName).join(', '),
+              min: settings.minDuration,
+            })}
           </p>
 
           {!dayIncluded ? (
-            <p className="mt-3 text-sm text-slate-500">
-              Ten dzień nie jest uwzględniany w okienkach (weekend możesz
-              włączyć w Ustawieniach).
-            </p>
+            <p className="mt-3 text-sm text-slate-500">{t('today.dayExcluded')}</p>
           ) : slots.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">
-              Brak wspólnych okienek w tym dniu.
-            </p>
+            <p className="mt-3 text-sm text-slate-500">{t('today.noSlots')}</p>
           ) : (
             <div className="mt-3 flex flex-wrap gap-2">
               {slots.map((slot) => (
@@ -257,18 +248,18 @@ export default function TodayTab({
             >
               <h3 className="font-semibold text-slate-800">
                 {member.displayName}
-                {member.userId === userId && ' (Ty)'}
+                {member.userId === userId && ` ${t('today.you')}`}
               </h3>
 
               {events.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500">Brak zajęć tego dnia.</p>
+                <p className="mt-2 text-sm text-slate-500">{t('today.noClasses')}</p>
               ) : (
                 <ul className="mt-2 divide-y divide-slate-100">
                   {events.map((event) => (
                     <li key={event.id} className="py-2 text-sm">
                       <div className="font-medium text-slate-800">
                         {event.start_time.slice(0, 5)}–{event.end_time.slice(0, 5)}{' '}
-                        {event.title}
+                        {event.is_masked ? t('common.busy') : event.title}
                       </div>
                       {(event.location || event.event_type) && (
                         <div className="text-xs text-slate-500">
@@ -297,24 +288,24 @@ export default function TodayTab({
       items={[
         {
           id: 'freeNow',
-          label: 'Kto jest wolny teraz',
+          label: t('settings.panel.freeNow'),
           node: showPanel('freeNow') ? <FreeNowWidget syncTick={syncTick} /> : null,
         },
         {
           id: 'pushups',
-          label: 'Licznik pompek',
+          label: t('settings.panel.pushups'),
           node: showPanel('pushups') ? <PushupCounter /> : null,
         },
         {
           id: 'upcomingTests',
-          label: 'Nadchodzące sprawdziany',
+          label: t('settings.panel.upcomingTests'),
           node: showPanel('upcomingTests') ? (
             <UpcomingTests tests={tests} onOpen={onOpenTest} />
           ) : null,
         },
-        { id: 'dayHeader', label: 'Dzień i nawigacja', node: dayHeader },
-        { id: 'todaySlots', label: 'Wspólne okienka dnia', node: slotsBlock },
-        { id: 'todayPeople', label: 'Zajęcia osób', node: peopleBlock },
+        { id: 'dayHeader', label: t('today.blockDay'), node: dayHeader },
+        { id: 'todaySlots', label: t('settings.panel.todaySlots'), node: slotsBlock },
+        { id: 'todayPeople', label: t('today.blockPeople'), node: peopleBlock },
       ]}
     />
   )

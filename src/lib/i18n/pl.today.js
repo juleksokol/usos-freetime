@@ -1,0 +1,77 @@
+import { flatten } from './flatten'
+
+// Polskie teksty: zakładka „Dziś”, pasek tygodni, odliczanie, rodzaje sprawdzianów
+export default flatten({
+  common: { busy: 'Zajęty' },
+  countdown: {
+    past: 'minęło',
+    today: 'dziś',
+    tomorrow: 'jutro',
+    inDays_one: 'za {count} dzień',
+    inDays_few: 'za {count} dni',
+    inDays_many: 'za {count} dni',
+    inDays_other: 'za {count} dnia',
+  },
+  testKind: {
+    exam: 'Egzamin',
+    colloquium: 'Kolokwium',
+    quiz: 'Kartkówka / inne',
+  },
+  week: {
+    prev: 'Poprzedni tydzień',
+    next: 'Następny tydzień',
+    today: 'Dziś',
+  },
+  today: {
+    headingToday: 'Dziś: {date}',
+    headingDay: 'Dzień: {date}',
+    prevDay: 'Poprzedni dzień',
+    nextDay: 'Następny dzień',
+    todayButton: 'Dziś',
+    group: 'Grupa:',
+    noGroup:
+      'Nie należysz do żadnej grupy, więc widzisz tylko swój dzień. Dołącz do grupy w zakładce „Grupy”, żeby zobaczyć znajomych.',
+    slotsTitle: 'Wspólne okienka',
+    slotsFromNow: '(od teraz)',
+    allHidden: 'Wszyscy są ukryci. Pokaż kogoś w zakładce „Wspólne okienka”.',
+    slotsFor:
+      'Dla: {names}. Minimalna długość: {min} min (zmienisz ją w Ustawieniach).',
+    dayExcluded:
+      'Ten dzień nie jest uwzględniany w okienkach (weekend możesz włączyć w Ustawieniach).',
+    noSlots: 'Brak wspólnych okienek w tym dniu.',
+    noClasses: 'Brak zajęć tego dnia.',
+    you: '(Ty)',
+    me: 'Ja',
+    blockDay: 'Dzień i nawigacja',
+    blockPeople: 'Zajęcia osób',
+  },
+  free: {
+    title: 'Kto jest wolny teraz',
+    checking: 'Sprawdzam plany…',
+    weekend: 'Dziś weekend: nikt nie ma zajęć w siatce.',
+    count_one: '{free} z {count} osoby wolnych',
+    count_few: '{free} z {count} osób wolnych',
+    count_many: '{free} z {count} osób wolnych',
+    count_other: '{free} z {count} osób wolnych',
+    noMoreSlots: 'Dziś nie ma już wspólnych okienek.',
+    freeFor: 'Wszyscy są wolni jeszcze {duration} (do {until}).',
+    nextSlot: 'Najbliższe wspólne okienko: {from}–{to} (za {duration}).',
+    busyUntil: 'zajęcia do {time}',
+    freeUntil: 'wolne do {time}',
+    freeAllDay: 'wolne do końca dnia',
+  },
+  pushups: {
+    title: 'Wyzwanie: pompki',
+    perDay: 'pompek dziennie',
+    dayInfo: 'Dzień {day} wyzwania · tydzień {week} · dzień {inWeek} z 7',
+    next_one: 'Za {count} dzień ({date}) będzie {next} dziennie.',
+    next_few: 'Za {count} dni ({date}) będzie {next} dziennie.',
+    next_many: 'Za {count} dni ({date}) będzie {next} dziennie.',
+    next_other: 'Za {count} dnia ({date}) będzie {next} dziennie.',
+    startsIn_one: 'Wyzwanie startuje za {count} dzień ({date}).',
+    startsIn_few: 'Wyzwanie startuje za {count} dni ({date}).',
+    startsIn_many: 'Wyzwanie startuje za {count} dni ({date}).',
+    startsIn_other: 'Wyzwanie startuje za {count} dnia ({date}).',
+  },
+  upcoming: { title: 'Nadchodzące sprawdziany' },
+})
